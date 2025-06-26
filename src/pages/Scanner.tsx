@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Scan, CheckCircle, XCircle, Camera } from "lucide-react";
+import { Scan, CheckCircle, XCircle, Camera, Ticket } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
 interface ScanResult {
@@ -153,12 +154,31 @@ const Scanner = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
+      {/* Header */}
+      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <Link to="/" className="flex items-center space-x-2">
+            <Ticket className="h-8 w-8 text-purple-600" />
+            <span className="text-2xl font-bold text-gray-900">TicketGen</span>
+          </Link>
+          <nav className="flex space-x-4">
+            <Link to="/">
+              <Button variant="outline">Home</Button>
+            </Link>
+            <Link to="/dashboard">
+              <Button variant="outline">Dashboard</Button>
+            </Link>
+            <Button variant="default">Scanner</Button>
+          </nav>
+        </div>
+      </header>
+
+      <div className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-3xl font-bold text-gray-900">QR Code Scanner</h1>
           <p className="text-gray-600 mt-1">Scan tickets and validate attendance</p>
         </div>
-      </header>
+      </div>
 
       <div className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-2 gap-8">

@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Calendar, Users, QrCode, Download, Upload } from "lucide-react";
+import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import QRCodeGenerator from "@/components/QRCodeGenerator";
 import TicketMockup from "@/components/TicketMockup";
@@ -78,12 +79,31 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
+      {/* Header */}
+      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <Link to="/" className="flex items-center space-x-2">
+            <Ticket className="h-8 w-8 text-purple-600" />
+            <span className="text-2xl font-bold text-gray-900">TicketGen</span>
+          </Link>
+          <nav className="flex space-x-4">
+            <Link to="/">
+              <Button variant="outline">Home</Button>
+            </Link>
+            <Button variant="default">Dashboard</Button>
+            <Link to="/scanner">
+              <Button variant="outline">Scanner</Button>
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      <div className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-3xl font-bold text-gray-900">Event Dashboard</h1>
           <p className="text-gray-600 mt-1">Manage your events and track attendance</p>
         </div>
-      </header>
+      </div>
 
       <div className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
