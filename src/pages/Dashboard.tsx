@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,9 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket } from "lucide-react";
+import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import QRCodeGenerator from "@/components/QRCodeGenerator";
 import TicketMockup from "@/components/TicketMockup";
 import AttendeeList from "@/components/AttendeeList";
@@ -25,6 +25,7 @@ interface Event {
 }
 
 const Dashboard = () => {
+  const { user, signOut } = useAuth();
   const [events, setEvents] = useState<Event[]>([
     {
       id: "1",
@@ -46,6 +47,22 @@ const Dashboard = () => {
   
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(events[0] || null);
   const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Signed Out",
+        description: "You have been signed out successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleCreateEvent = () => {
     if (!newEvent.name || !newEvent.date || !newEvent.ticketCount) {
@@ -86,7 +103,10 @@ const Dashboard = () => {
             <Ticket className="h-8 w-8 text-purple-600" />
             <span className="text-2xl font-bold text-gray-900">TicketGen</span>
           </Link>
-          <nav className="flex space-x-4">
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-600">
+              Welcome, {user?.email}
+            </span>
             <Link to="/">
               <Button variant="outline">Home</Button>
             </Link>
@@ -94,7 +114,11 @@ const Dashboard = () => {
             <Link to="/scanner">
               <Button variant="outline">Scanner</Button>
             </Link>
-          </nav>
+            <Button variant="outline" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 

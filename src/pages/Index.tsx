@@ -1,10 +1,31 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { QrCode, Ticket, Upload, Scan } from "lucide-react";
+import { QrCode, Ticket, Upload, Scan, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Signed Out",
+        description: "You have been signed out successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
       {/* Header */}
@@ -14,13 +35,30 @@ const Index = () => {
             <Ticket className="h-8 w-8 text-purple-600" />
             <span className="text-2xl font-bold text-gray-900">TicketGen</span>
           </div>
-          <nav className="flex space-x-4">
-            <Link to="/dashboard">
-              <Button variant="outline">Dashboard</Button>
-            </Link>
-            <Link to="/scanner">
-              <Button variant="outline">Scanner</Button>
-            </Link>
+          <nav className="flex space-x-4 items-center">
+            {user ? (
+              <>
+                <Link to="/dashboard">
+                  <Button variant="outline">Dashboard</Button>
+                </Link>
+                <Link to="/scanner">
+                  <Button variant="outline">Scanner</Button>
+                </Link>
+                <Button variant="outline" onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/auth">
+                  <Button variant="outline">Sign In</Button>
+                </Link>
+                <Link to="/auth">
+                  <Button>Get Started</Button>
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -36,16 +74,33 @@ const Index = () => {
           Perfect for events of any size.
         </p>
         <div className="flex justify-center space-x-4">
-          <Link to="/dashboard">
-            <Button size="lg" className="bg-purple-600 hover:bg-purple-700">
-              Get Started
-            </Button>
-          </Link>
-          <Link to="/scanner">
-            <Button size="lg" variant="outline">
-              Scan Tickets
-            </Button>
-          </Link>
+          {user ? (
+            <>
+              <Link to="/dashboard">
+                <Button size="lg" className="bg-purple-600 hover:bg-purple-700">
+                  Go to Dashboard
+                </Button>
+              </Link>
+              <Link to="/scanner">
+                <Button size="lg" variant="outline">
+                  Scan Tickets
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link to="/auth">
+                <Button size="lg" className="bg-purple-600 hover:bg-purple-700">
+                  Get Started
+                </Button>
+              </Link>
+              <Link to="/auth">
+                <Button size="lg" variant="outline">
+                  Sign In
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </section>
 
@@ -112,11 +167,19 @@ const Index = () => {
           <p className="text-xl mb-8 opacity-90">
             Join thousands of event organizers who trust TicketGen for their events.
           </p>
-          <Link to="/dashboard">
-            <Button size="lg" variant="secondary">
-              Start Creating Events
-            </Button>
-          </Link>
+          {user ? (
+            <Link to="/dashboard">
+              <Button size="lg" variant="secondary">
+                Go to Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Link to="/auth">
+              <Button size="lg" variant="secondary">
+                Start Creating Events
+              </Button>
+            </Link>
+          )}
         </div>
       </section>
     </div>

@@ -1,12 +1,12 @@
-
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Scan, CheckCircle, XCircle, Camera, Ticket } from "lucide-react";
+import { Scan, CheckCircle, XCircle, Camera, Ticket, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ScanResult {
   id: string;
@@ -18,11 +18,28 @@ interface ScanResult {
 }
 
 const Scanner = () => {
+  const { user, signOut } = useAuth();
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [manualInput, setManualInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Signed Out",
+        description: "You have been signed out successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const processQRCode = (qrData: string) => {
     try {
@@ -161,7 +178,10 @@ const Scanner = () => {
             <Ticket className="h-8 w-8 text-purple-600" />
             <span className="text-2xl font-bold text-gray-900">TicketGen</span>
           </Link>
-          <nav className="flex space-x-4">
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-600">
+              Welcome, {user?.email}
+            </span>
             <Link to="/">
               <Button variant="outline">Home</Button>
             </Link>
@@ -169,7 +189,11 @@ const Scanner = () => {
               <Button variant="outline">Dashboard</Button>
             </Link>
             <Button variant="default">Scanner</Button>
-          </nav>
+            <Button variant="outline" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 
