@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,7 @@ import { Scan, CheckCircle, XCircle, Camera, Ticket, LogOut } from "lucide-react
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQRScanner } from "@/hooks/useQRScanner";
 
 interface ScanResult {
   id: string;
@@ -22,8 +24,18 @@ const Scanner = () => {
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [manualInput, setManualInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const { toast } = useToast();
+
+  const handleQRCodeDetected = useCallback((qrData: string) => {
+    console.log('Processing QR code:', qrData);
+    processQRCode(qrData);
+  }, [scanResults]);
+
+  const { videoRef, canvasRef } = useQRScanner({
+    onQRCodeDetected: handleQRCodeDetected,
+    isScanning
+  });
 
   const handleSignOut = async () => {
     try {
@@ -62,7 +74,7 @@ const Scanner = () => {
           : 'Valid ticket - Access granted'
       };
 
-      setScanResults([scanResult, ...scanResults]);
+      setScanResults(prev => [scanResult, ...prev]);
 
       toast({
         title: scanResult.status === 'valid' ? "Valid Ticket" : "Duplicate Ticket",
@@ -80,7 +92,7 @@ const Scanner = () => {
         message: 'Invalid QR code format'
       };
 
-      setScanResults([scanResult, ...scanResults]);
+      setScanResults(prev => [scanResult, ...prev]);
 
       toast({
         title: "Invalid QR Code",
@@ -105,38 +117,53 @@ const Scanner = () => {
   };
 
   const startCamera = async () => {
-    setIsScanning(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
       });
       
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        videoRef.current.srcObject = mediaStream;
         videoRef.current.play();
       }
+
+      setStream(mediaStream);
+      setIsScanning(true);
 
       toast({
         title: "Camera Started",
         description: "Point your camera at a QR code to scan it."
       });
     } catch (error) {
+      console.error('Camera error:', error);
       toast({
         title: "Camera Error",
         description: "Unable to access camera. Please check permissions or use manual input.",
         variant: "destructive"
       });
-      setIsScanning(false);
     }
   };
 
   const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
+    if (stream) {
       stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    
+    if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    
     setIsScanning(false);
+
+    toast({
+      title: "Camera Stopped",
+      description: "QR code scanning has been stopped."
+    });
   };
 
   const getStatusIcon = (status: string) => {
@@ -223,12 +250,27 @@ const Scanner = () => {
                 <div className="space-y-4">
                   <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative">
                     {isScanning ? (
-                      <video
-                        ref={videoRef}
-                        className="w-full h-full object-cover"
-                        autoPlay
-                        playsInline
-                      />
+                      <>
+                        <video
+                          ref={videoRef}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          playsInline
+                          muted
+                        />
+                        <canvas
+                          ref={canvasRef}
+                          className="hidden"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-64 h-64 border-2 border-white rounded-lg shadow-lg">
+                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-purple-500 rounded-tl-lg"></div>
+                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-purple-500 rounded-tr-lg"></div>
+                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-purple-500 rounded-bl-lg"></div>
+                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-purple-500 rounded-br-lg"></div>
+                          </div>
+                        </div>
+                      </>
                     ) : (
                       <div className="flex items-center justify-center h-full">
                         <div className="text-center">

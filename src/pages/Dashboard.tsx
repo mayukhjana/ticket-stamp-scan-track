@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket, LogOut } from 
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEventStorage } from "@/hooks/useEventStorage";
 import QRCodeGenerator from "@/components/QRCodeGenerator";
 import TicketMockup from "@/components/TicketMockup";
 import AttendeeList from "@/components/AttendeeList";
@@ -26,17 +28,7 @@ interface Event {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
-  const [events, setEvents] = useState<Event[]>([
-    {
-      id: "1",
-      name: "Tech Conference 2024",
-      date: "2024-07-15",
-      description: "Annual technology conference",
-      totalTickets: 500,
-      scannedTickets: 127,
-      qrCodes: []
-    }
-  ]);
+  const { events, addEvent, updateEvent } = useEventStorage();
   
   const [newEvent, setNewEvent] = useState({
     name: "",
@@ -47,6 +39,13 @@ const Dashboard = () => {
   
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(events[0] || null);
   const { toast } = useToast();
+
+  // Update selectedEvent when events change (e.g., after loading from storage)
+  useState(() => {
+    if (!selectedEvent && events.length > 0) {
+      setSelectedEvent(events[0]);
+    }
+  });
 
   const handleSignOut = async () => {
     try {
@@ -84,7 +83,7 @@ const Dashboard = () => {
       qrCodes: []
     };
 
-    setEvents([...events, event]);
+    addEvent(event);
     setSelectedEvent(event);
     setNewEvent({ name: "", date: "", description: "", ticketCount: "" });
     
@@ -269,11 +268,7 @@ const Dashboard = () => {
                   <QRCodeGenerator 
                     event={selectedEvent} 
                     onQRCodesGenerated={(qrCodes) => {
-                      setEvents(events.map(e => 
-                        e.id === selectedEvent.id 
-                          ? { ...e, qrCodes } 
-                          : e
-                      ));
+                      updateEvent(selectedEvent.id, { qrCodes });
                       setSelectedEvent({ ...selectedEvent, qrCodes });
                     }} 
                   />
@@ -287,11 +282,8 @@ const Dashboard = () => {
                   <AttendeeList 
                     event={selectedEvent}
                     onAttendeeUpdate={(scannedCount) => {
-                      const updatedEvent = { ...selectedEvent, scannedTickets: scannedCount };
-                      setEvents(events.map(e => 
-                        e.id === selectedEvent.id ? updatedEvent : e
-                      ));
-                      setSelectedEvent(updatedEvent);
+                      updateEvent(selectedEvent.id, { scannedTickets: scannedCount });
+                      setSelectedEvent({ ...selectedEvent, scannedTickets: scannedCount });
                     }}
                   />
                 </TabsContent>
