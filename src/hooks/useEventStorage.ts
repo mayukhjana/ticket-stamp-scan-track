@@ -1,5 +1,7 @@
 
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Event {
   id: string;
@@ -11,68 +13,126 @@ interface Event {
   qrCodes: string[];
 }
 
-const STORAGE_KEY = 'ticketgen_events';
-
 export const useEventStorage = () => {
+  const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load events from localStorage on mount
-  useEffect(() => {
-    const savedEvents = localStorage.getItem(STORAGE_KEY);
-    if (savedEvents) {
-      try {
-        const parsedEvents = JSON.parse(savedEvents);
-        setEvents(parsedEvents);
-      } catch (error) {
-        console.error('Failed to parse stored events:', error);
-        // Initialize with default event if parsing fails
-        const defaultEvent = {
-          id: "1",
-          name: "Tech Conference 2024",
-          date: "2024-07-15",
-          description: "Annual technology conference",
-          totalTickets: 500,
-          scannedTickets: 127,
-          qrCodes: []
-        };
-        setEvents([defaultEvent]);
-      }
-    } else {
-      // Initialize with default event if no stored events
-      const defaultEvent = {
-        id: "1",
-        name: "Tech Conference 2024",
-        date: "2024-07-15",
-        description: "Annual technology conference",
-        totalTickets: 500,
-        scannedTickets: 127,
-        qrCodes: []
-      };
-      setEvents([defaultEvent]);
+  // Load events from Supabase
+  const loadEvents = async () => {
+    if (!user) {
+      setEvents([]);
+      setIsLoading(false);
+      return;
     }
-  }, []);
 
-  // Save events to localStorage whenever events change
-  useEffect(() => {
-    if (events.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedEvents = data.map(event => ({
+        id: event.id,
+        name: event.name,
+        date: event.date,
+        description: event.description || '',
+        totalTickets: event.total_tickets,
+        scannedTickets: event.scanned_tickets,
+        qrCodes: event.qr_codes || []
+      }));
+
+      setEvents(formattedEvents);
+    } catch (error) {
+      console.error('Error loading events:', error);
+      // Fallback to empty array if error
+      setEvents([]);
+    } finally {
+      setIsLoading(false);
     }
-  }, [events]);
-
-  const addEvent = (event: Event) => {
-    setEvents(prev => [...prev, event]);
   };
 
-  const updateEvent = (eventId: string, updates: Partial<Event>) => {
-    setEvents(prev => prev.map(event => 
-      event.id === eventId ? { ...event, ...updates } : event
-    ));
+  // Load events when user changes
+  useEffect(() => {
+    loadEvents();
+  }, [user]);
+
+  const addEvent = async (event: Event) => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('events')
+        .insert({
+          user_id: user.id,
+          name: event.name,
+          date: event.date,
+          description: event.description,
+          total_tickets: event.totalTickets,
+          scanned_tickets: 0,
+          qr_codes: []
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newEvent = {
+        id: data.id,
+        name: data.name,
+        date: data.date,
+        description: data.description || '',
+        totalTickets: data.total_tickets,
+        scannedTickets: data.scanned_tickets,
+        qrCodes: data.qr_codes || []
+      };
+
+      setEvents(prev => [newEvent, ...prev]);
+    } catch (error) {
+      console.error('Error adding event:', error);
+      throw error;
+    }
+  };
+
+  const updateEvent = async (eventId: string, updates: Partial<Event>) => {
+    if (!user) return;
+
+    try {
+      const updateData: any = {};
+      
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.date !== undefined) updateData.date = updates.date;
+      if (updates.description !== undefined) updateData.description = updates.description;
+      if (updates.totalTickets !== undefined) updateData.total_tickets = updates.totalTickets;
+      if (updates.scannedTickets !== undefined) updateData.scanned_tickets = updates.scannedTickets;
+      if (updates.qrCodes !== undefined) updateData.qr_codes = updates.qrCodes;
+
+      const { error } = await supabase
+        .from('events')
+        .update(updateData)
+        .eq('id', eventId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setEvents(prev => prev.map(event => 
+        event.id === eventId ? { ...event, ...updates } : event
+      ));
+    } catch (error) {
+      console.error('Error updating event:', error);
+      throw error;
+    }
   };
 
   return {
     events,
     addEvent,
     updateEvent,
-    setEvents
+    setEvents,
+    isLoading,
+    loadEvents
   };
 };

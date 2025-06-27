@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Scan, CheckCircle, XCircle, Camera, Ticket, LogOut } from "lucide-react";
+import { Scan, CheckCircle, XCircle, Camera, Ticket, LogOut, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQRScanner } from "@/hooks/useQRScanner";
+import { useScanResults } from "@/hooks/useScanResults";
 
 interface ScanResult {
   id: string;
@@ -21,15 +22,15 @@ interface ScanResult {
 
 const Scanner = () => {
   const { user, signOut } = useAuth();
-  const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+  const { scanResults, addScanResult, isLoading } = useScanResults();
   const [manualInput, setManualInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const { toast } = useToast();
 
-  const handleQRCodeDetected = useCallback((qrData: string) => {
+  const handleQRCodeDetected = useCallback(async (qrData: string) => {
     console.log('Processing QR code:', qrData);
-    processQRCode(qrData);
+    await processQRCode(qrData);
   }, [scanResults]);
 
   const { videoRef, canvasRef } = useQRScanner({
@@ -53,7 +54,7 @@ const Scanner = () => {
     }
   };
 
-  const processQRCode = (qrData: string) => {
+  const processQRCode = async (qrData: string) => {
     try {
       const ticketData = JSON.parse(qrData);
       
@@ -63,36 +64,32 @@ const Scanner = () => {
                  result.ticketNumber === ticketData.ticketNumber
       );
 
-      const scanResult: ScanResult = {
-        id: Date.now().toString(),
+      const scanResultData = {
         eventName: ticketData.eventName || 'Unknown Event',
         ticketNumber: ticketData.ticketNumber || 0,
-        scanTime: new Date().toLocaleString(),
-        status: existingScan ? 'duplicate' : 'valid',
+        status: existingScan ? 'duplicate' as const : 'valid' as const,
         message: existingScan 
           ? 'Ticket already scanned!' 
           : 'Valid ticket - Access granted'
       };
 
-      setScanResults(prev => [scanResult, ...prev]);
+      await addScanResult(scanResultData);
 
       toast({
-        title: scanResult.status === 'valid' ? "Valid Ticket" : "Duplicate Ticket",
-        description: scanResult.message,
-        variant: scanResult.status === 'valid' ? "default" : "destructive"
+        title: scanResultData.status === 'valid' ? "Valid Ticket" : "Duplicate Ticket",
+        description: scanResultData.message,
+        variant: scanResultData.status === 'valid' ? "default" : "destructive"
       });
 
     } catch (error) {
-      const scanResult: ScanResult = {
-        id: Date.now().toString(),
+      const scanResultData = {
         eventName: 'Invalid',
         ticketNumber: 0,
-        scanTime: new Date().toLocaleString(),
-        status: 'invalid',
+        status: 'invalid' as const,
         message: 'Invalid QR code format'
       };
 
-      setScanResults(prev => [scanResult, ...prev]);
+      await addScanResult(scanResultData);
 
       toast({
         title: "Invalid QR Code",
@@ -102,7 +99,7 @@ const Scanner = () => {
     }
   };
 
-  const handleManualScan = () => {
+  const handleManualScan = async () => {
     if (!manualInput.trim()) {
       toast({
         title: "No Input",
@@ -112,7 +109,7 @@ const Scanner = () => {
       return;
     }
 
-    processQRCode(manualInput);
+    await processQRCode(manualInput);
     setManualInput("");
   };
 
@@ -347,37 +344,44 @@ const Scanner = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {scanResults.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <Scan className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                      <p>No scans yet</p>
-                      <p className="text-sm">Start scanning QR codes to see results here</p>
-                    </div>
-                  ) : (
-                    scanResults.map((result) => (
-                      <div
-                        key={result.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div className="flex items-center space-x-3">
-                          {getStatusIcon(result.status)}
-                          <div>
-                            <p className="font-medium">{result.eventName}</p>
-                            <p className="text-sm text-gray-600">
-                              Ticket #{result.ticketNumber}
-                            </p>
-                            <p className="text-xs text-gray-500">{result.scanTime}</p>
+                {isLoading ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-600" />
+                    <p className="text-gray-600">Loading scan results...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {scanResults.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <Scan className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                        <p>No scans yet</p>
+                        <p className="text-sm">Start scanning QR codes to see results here</p>
+                      </div>
+                    ) : (
+                      scanResults.map((result) => (
+                        <div
+                          key={result.id}
+                          className="flex items-center justify-between p-4 border rounded-lg"
+                        >
+                          <div className="flex items-center space-x-3">
+                            {getStatusIcon(result.status)}
+                            <div>
+                              <p className="font-medium">{result.eventName}</p>
+                              <p className="text-sm text-gray-600">
+                                Ticket #{result.ticketNumber}
+                              </p>
+                              <p className="text-xs text-gray-500">{result.scanTime}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {getStatusBadge(result.status)}
+                            <p className="text-xs text-gray-600 mt-1">{result.message}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          {getStatusBadge(result.status)}
-                          <p className="text-xs text-gray-600 mt-1">{result.message}</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

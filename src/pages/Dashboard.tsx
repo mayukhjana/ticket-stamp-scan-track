@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket, LogOut } from "lucide-react";
+import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket, LogOut, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,7 +28,7 @@ interface Event {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
-  const { events, addEvent, updateEvent } = useEventStorage();
+  const { events, addEvent, updateEvent, isLoading } = useEventStorage();
   
   const [newEvent, setNewEvent] = useState({
     name: "",
@@ -37,10 +37,11 @@ const Dashboard = () => {
     ticketCount: ""
   });
   
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(events[0] || null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
 
-  // Update selectedEvent when events change (e.g., after loading from storage)
+  // Update selectedEvent when events load
   useState(() => {
     if (!selectedEvent && events.length > 0) {
       setSelectedEvent(events[0]);
@@ -63,7 +64,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleCreateEvent = () => {
+  const handleCreateEvent = async () => {
     if (!newEvent.name || !newEvent.date || !newEvent.ticketCount) {
       toast({
         title: "Missing Information",
@@ -73,25 +74,46 @@ const Dashboard = () => {
       return;
     }
 
-    const event: Event = {
-      id: Date.now().toString(),
-      name: newEvent.name,
-      date: newEvent.date,
-      description: newEvent.description,
-      totalTickets: parseInt(newEvent.ticketCount),
-      scannedTickets: 0,
-      qrCodes: []
-    };
+    setIsCreating(true);
+    try {
+      const event: Event = {
+        id: '', // Will be set by database
+        name: newEvent.name,
+        date: newEvent.date,
+        description: newEvent.description,
+        totalTickets: parseInt(newEvent.ticketCount),
+        scannedTickets: 0,
+        qrCodes: []
+      };
 
-    addEvent(event);
-    setSelectedEvent(event);
-    setNewEvent({ name: "", date: "", description: "", ticketCount: "" });
-    
-    toast({
-      title: "Event Created",
-      description: `${event.name} has been created successfully.`
-    });
+      await addEvent(event);
+      setNewEvent({ name: "", date: "", description: "", ticketCount: "" });
+      
+      toast({
+        title: "Event Created",
+        description: `${event.name} has been created successfully.`
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create event. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCreating(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-purple-600" />
+          <p className="text-gray-600">Loading your events...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -163,6 +185,14 @@ const Dashboard = () => {
                   </div>
                 ))}
 
+                {events.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No events yet</p>
+                    <p className="text-sm">Create your first event below</p>
+                  </div>
+                )}
+
                 {/* Create New Event Form */}
                 <Card className="mt-6">
                   <CardHeader>
@@ -210,8 +240,19 @@ const Dashboard = () => {
                         rows={3}
                       />
                     </div>
-                    <Button onClick={handleCreateEvent} className="w-full">
-                      Create Event
+                    <Button 
+                      onClick={handleCreateEvent} 
+                      className="w-full"
+                      disabled={isCreating}
+                    >
+                      {isCreating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        'Create Event'
+                      )}
                     </Button>
                   </CardContent>
                 </Card>
@@ -267,8 +308,8 @@ const Dashboard = () => {
                 <TabsContent value="qrcodes">
                   <QRCodeGenerator 
                     event={selectedEvent} 
-                    onQRCodesGenerated={(qrCodes) => {
-                      updateEvent(selectedEvent.id, { qrCodes });
+                    onQRCodesGenerated={async (qrCodes) => {
+                      await updateEvent(selectedEvent.id, { qrCodes });
                       setSelectedEvent({ ...selectedEvent, qrCodes });
                     }} 
                   />
@@ -281,8 +322,8 @@ const Dashboard = () => {
                 <TabsContent value="attendees">
                   <AttendeeList 
                     event={selectedEvent}
-                    onAttendeeUpdate={(scannedCount) => {
-                      updateEvent(selectedEvent.id, { scannedTickets: scannedCount });
+                    onAttendeeUpdate={async (scannedCount) => {
+                      await updateEvent(selectedEvent.id, { scannedTickets: scannedCount });
                       setSelectedEvent({ ...selectedEvent, scannedTickets: scannedCount });
                     }}
                   />

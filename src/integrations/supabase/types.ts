@@ -9,6 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      events: {
+        Row: {
+          created_at: string
+          date: string
+          description: string | null
+          id: string
+          name: string
+          qr_codes: Json | null
+          scanned_tickets: number
+          total_tickets: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          description?: string | null
+          id?: string
+          name: string
+          qr_codes?: Json | null
+          scanned_tickets?: number
+          total_tickets?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          description?: string | null
+          id?: string
+          name?: string
+          qr_codes?: Json | null
+          scanned_tickets?: number
+          total_tickets?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -32,6 +71,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      scan_results: {
+        Row: {
+          created_at: string
+          event_id: string | null
+          event_name: string
+          id: string
+          message: string
+          scan_time: string
+          status: string
+          ticket_number: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id?: string | null
+          event_name: string
+          id?: string
+          message: string
+          scan_time?: string
+          status: string
+          ticket_number: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string | null
+          event_name?: string
+          id?: string
+          message?: string
+          scan_time?: string
+          status?: string
+          ticket_number?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_results_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
