@@ -13,6 +13,15 @@ interface Event {
   qrCodes: string[];
 }
 
+// Helper function to safely convert Json to string array
+const safeJsonToStringArray = (jsonData: any): string[] => {
+  if (!jsonData) return [];
+  if (Array.isArray(jsonData)) {
+    return jsonData.filter(item => typeof item === 'string');
+  }
+  return [];
+};
+
 export const useEventStorage = () => {
   const { user } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
@@ -42,7 +51,7 @@ export const useEventStorage = () => {
         description: event.description || '',
         totalTickets: event.total_tickets,
         scannedTickets: event.scanned_tickets,
-        qrCodes: event.qr_codes || []
+        qrCodes: safeJsonToStringArray(event.qr_codes)
       }));
 
       setEvents(formattedEvents);
@@ -87,7 +96,7 @@ export const useEventStorage = () => {
         description: data.description || '',
         totalTickets: data.total_tickets,
         scannedTickets: data.scanned_tickets,
-        qrCodes: data.qr_codes || []
+        qrCodes: safeJsonToStringArray(data.qr_codes)
       };
 
       setEvents(prev => [newEvent, ...prev]);
