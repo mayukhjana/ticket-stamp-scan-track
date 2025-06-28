@@ -114,7 +114,9 @@ const Scanner = () => {
   };
 
   const startCamera = async () => {
+    console.log('Starting camera initialization...');
     setIsInitializingCamera(true);
+    
     try {
       console.log('Requesting camera access...');
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
@@ -125,50 +127,61 @@ const Scanner = () => {
         } 
       });
       
-      console.log('Camera access granted, setting up video...');
+      console.log('Camera stream obtained:', mediaStream);
       
       if (videoRef.current) {
+        console.log('Attaching stream to video element...');
         videoRef.current.srcObject = mediaStream;
         
-        // Wait for video to be ready
-        videoRef.current.onloadedmetadata = () => {
-          console.log('Video metadata loaded');
-          if (videoRef.current) {
-            videoRef.current.play().then(() => {
-              console.log('Video playing successfully');
-              setStream(mediaStream);
-              setIsScanning(true);
-              setIsInitializingCamera(false);
-              
-              toast({
-                title: "Camera Started",
-                description: "Point your camera at a QR code to scan it."
-              });
-            }).catch((error) => {
-              console.error('Error playing video:', error);
-              setIsInitializingCamera(false);
-              toast({
-                title: "Camera Error",
-                description: "Failed to start video playback.",
-                variant: "destructive"
-              });
+        // Set up event handlers before playing
+        const video = videoRef.current;
+        
+        const handleLoadedMetadata = () => {
+          console.log('Video metadata loaded, video dimensions:', video.videoWidth, 'x', video.videoHeight);
+          
+          video.play().then(() => {
+            console.log('Video playing successfully');
+            setStream(mediaStream);
+            setIsScanning(true);
+            setIsInitializingCamera(false);
+            
+            toast({
+              title: "Camera Started",
+              description: "Point your camera at a QR code to scan it."
             });
-          }
+          }).catch((error) => {
+            console.error('Error playing video:', error);
+            setIsInitializingCamera(false);
+            toast({
+              title: "Camera Error",
+              description: "Failed to start video playback.",
+              variant: "destructive"
+            });
+          });
         };
 
-        videoRef.current.onerror = (error) => {
+        const handleError = (error: any) => {
           console.error('Video error:', error);
           setIsInitializingCamera(false);
           toast({
-            title: "Camera Error",
-            description: "Failed to initialize video.",
+            title: "Video Error",
+            description: "Failed to initialize video stream.",
             variant: "destructive"
           });
         };
+
+        // Add event listeners
+        video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+        video.addEventListener('error', handleError, { once: true });
+        
+        // Force load if metadata is already available
+        if (video.readyState >= 1) {
+          handleLoadedMetadata();
+        }
       }
 
     } catch (error) {
-      console.error('Camera error:', error);
+      console.error('Camera access error:', error);
       setIsInitializingCamera(false);
       toast({
         title: "Camera Error",
@@ -283,7 +296,7 @@ const Scanner = () => {
               <CardContent className="space-y-4">
                 {/* Camera Scanner */}
                 <div className="space-y-4">
-                  <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative">
+                  <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative border-2 border-gray-200">
                     {isScanning ? (
                       <>
                         <video
@@ -292,7 +305,6 @@ const Scanner = () => {
                           autoPlay
                           playsInline
                           muted
-                          style={{ display: 'block' }}
                         />
                         <canvas
                           ref={canvasRef}
