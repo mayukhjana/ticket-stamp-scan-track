@@ -117,7 +117,7 @@ const Scanner = () => {
     try {
       console.log("Requesting camera access...");
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: true
+        video: { facingMode: { ideal: 'environment' } }
       });
       console.log("Camera stream obtained:", mediaStream);
       setStream(mediaStream);
