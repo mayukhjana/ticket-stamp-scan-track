@@ -131,16 +131,27 @@ const Scanner = () => {
       
       if (videoRef.current) {
         console.log('Attaching stream to video element...');
-        videoRef.current.srcObject = mediaStream;
-        
-        // Set up event handlers before playing
         const video = videoRef.current;
+        
+        // Set video properties before attaching stream
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('autoplay', 'true');
+        video.setAttribute('muted', 'true');
+        video.style.display = 'block';
+        video.style.width = '100%';
+        video.style.height = '100%';
+        video.style.objectFit = 'cover';
+        
+        video.srcObject = mediaStream;
         
         const handleLoadedMetadata = () => {
           console.log('Video metadata loaded, video dimensions:', video.videoWidth, 'x', video.videoHeight);
           
+          // Ensure video is visible and properly sized
+          video.style.visibility = 'visible';
+          
           video.play().then(() => {
-            console.log('Video playing successfully');
+            console.log('Video playing successfully, readyState:', video.readyState);
             setStream(mediaStream);
             setIsScanning(true);
             setIsInitializingCamera(false);
@@ -170,12 +181,19 @@ const Scanner = () => {
           });
         };
 
+        const handleCanPlay = () => {
+          console.log('Video can play, attempting to play...');
+          video.play().catch(console.error);
+        };
+
         // Add event listeners
         video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
         video.addEventListener('error', handleError, { once: true });
+        video.addEventListener('canplay', handleCanPlay, { once: true });
         
         // Force load if metadata is already available
         if (video.readyState >= 1) {
+          console.log('Video metadata already loaded, triggering handler');
           handleLoadedMetadata();
         }
       }
@@ -204,6 +222,7 @@ const Scanner = () => {
     
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+      videoRef.current.style.display = 'none';
     }
     
     setIsScanning(false);
@@ -301,10 +320,16 @@ const Scanner = () => {
                       <>
                         <video
                           ref={videoRef}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover block"
                           autoPlay
                           playsInline
                           muted
+                          style={{ 
+                            display: 'block',
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
                         />
                         <canvas
                           ref={canvasRef}
