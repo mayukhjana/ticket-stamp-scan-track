@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQRScanner } from "@/hooks/useQRScanner";
 import { useScanResults } from "@/hooks/useScanResults";
+import jsQR from 'jsqr';
 
 interface ScanResult {
   id: string;
@@ -204,7 +205,6 @@ const Scanner = () => {
         videoRef.current.muted = true;
         videoRef.current.autoplay = true;
         try {
-          videoRef.current.load && videoRef.current.load();
           await videoRef.current.play();
           console.log("Camera stream attached and playing (from useEffect).");
         } catch (err: unknown) {
@@ -304,19 +304,21 @@ const Scanner = () => {
                           <div
                             className="absolute left-1/2 top-1/2"
                             style={{
-                              width: '256px',
-                              height: '256px',
+                              width: 'min(256px, 80vw)',
+                              height: 'min(256px, 80vw)',
                               transform: 'translate(-50%, -50%)',
                               boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
                               border: '4px solid #a855f7',
                               borderRadius: '16px',
                               background: 'transparent',
+                              maxWidth: 'calc(100vw - 32px)',
+                              maxHeight: 'calc(100vh - 200px)',
                             }}
                           >
-                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-purple-500 rounded-tl-lg" />
-                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-purple-500 rounded-tr-lg" />
-                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-purple-500 rounded-bl-lg" />
-                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-purple-500 rounded-br-lg" />
+                            <div className="absolute top-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-l-4 border-purple-500 rounded-tl-lg" />
+                            <div className="absolute top-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-r-4 border-purple-500 rounded-tr-lg" />
+                            <div className="absolute bottom-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-l-4 border-purple-500 rounded-bl-lg" />
+                            <div className="absolute bottom-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-r-4 border-purple-500 rounded-br-lg" />
                           </div>
                         </div>
                       </>
@@ -353,7 +355,6 @@ const Scanner = () => {
                               context.drawImage(video, 0, 0, canvas.width, canvas.height);
                               const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
                               // jsQR is used here; can swap to zxing-js/browser for more robust scanning
-                              const jsQR = require('jsqr');
                               const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
                               console.log('Manual scan attempt, QR result:', qrCode);
                               if (qrCode) {
