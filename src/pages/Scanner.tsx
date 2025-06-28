@@ -29,7 +29,7 @@ const Scanner = () => {
   const { toast } = useToast();
 
   const handleQRCodeDetected = useCallback(async (qrData: string) => {
-    console.log('QR code detected:', qrData);
+    console.log('Raw QR data:', qrData);
     await processQRCode(qrData);
   }, [scanResults]);
 
@@ -93,7 +93,7 @@ const Scanner = () => {
 
       toast({
         title: "Invalid QR Code",
-        description: "This QR code is not a valid ticket.",
+        description: "This QR code is not a valid ticket or event.",
         variant: "destructive"
       });
     }
@@ -117,7 +117,11 @@ const Scanner = () => {
     try {
       console.log("Requesting camera access...");
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: { ideal: 'environment' } }
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
       });
       console.log("Camera stream obtained:", mediaStream);
       setStream(mediaStream);
@@ -333,9 +337,36 @@ const Scanner = () => {
                         Start Camera
                       </Button>
                     ) : (
-                      <Button onClick={stopCamera} variant="outline" className="flex-1">
-                        Stop Camera
-                      </Button>
+                      <>
+                        <Button onClick={stopCamera} variant="outline" className="flex-1">
+                          Stop Camera
+                        </Button>
+                        <Button onClick={() => {
+                          // Manual scan attempt
+                          if (videoRef.current && canvasRef.current) {
+                            const video = videoRef.current;
+                            const canvas = canvasRef.current;
+                            const context = canvas.getContext('2d');
+                            if (context && video.readyState === video.HAVE_ENOUGH_DATA) {
+                              canvas.width = video.videoWidth;
+                              canvas.height = video.videoHeight;
+                              context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                              const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                              // jsQR is used here; can swap to zxing-js/browser for more robust scanning
+                              const jsQR = require('jsqr');
+                              const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+                              console.log('Manual scan attempt, QR result:', qrCode);
+                              if (qrCode) {
+                                handleQRCodeDetected(qrCode.data);
+                              } else {
+                                toast({ title: 'No QR code found', description: 'Try again or adjust the ticket position.', variant: 'destructive' });
+                              }
+                            }
+                          }
+                        }} variant="secondary" className="flex-1">
+                          Scan Now
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
