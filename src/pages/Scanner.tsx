@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,12 +25,13 @@ const Scanner = () => {
   const [manualInput, setManualInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isInitializingCamera, setIsInitializingCamera] = useState(false);
   const { toast } = useToast();
 
   const handleQRCodeDetected = useCallback(async (qrData: string) => {
     console.log('Processing QR code:', qrData);
     await processQRCode(qrData);
-  }, [scanResults]);
+  }, []);
 
   const { videoRef, canvasRef } = useQRScanner({
     onQRCodeDetected: handleQRCodeDetected,
@@ -114,7 +114,9 @@ const Scanner = () => {
   };
 
   const startCamera = async () => {
+    setIsInitializingCamera(true);
     try {
+      console.log('Requesting camera access...');
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           facingMode: 'environment',
@@ -123,20 +125,51 @@ const Scanner = () => {
         } 
       });
       
+      console.log('Camera access granted, setting up video...');
+      
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
+        
+        // Wait for video to be ready
+        videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded');
+          if (videoRef.current) {
+            videoRef.current.play().then(() => {
+              console.log('Video playing successfully');
+              setStream(mediaStream);
+              setIsScanning(true);
+              setIsInitializingCamera(false);
+              
+              toast({
+                title: "Camera Started",
+                description: "Point your camera at a QR code to scan it."
+              });
+            }).catch((error) => {
+              console.error('Error playing video:', error);
+              setIsInitializingCamera(false);
+              toast({
+                title: "Camera Error",
+                description: "Failed to start video playback.",
+                variant: "destructive"
+              });
+            });
+          }
+        };
+
+        videoRef.current.onerror = (error) => {
+          console.error('Video error:', error);
+          setIsInitializingCamera(false);
+          toast({
+            title: "Camera Error",
+            description: "Failed to initialize video.",
+            variant: "destructive"
+          });
+        };
       }
 
-      setStream(mediaStream);
-      setIsScanning(true);
-
-      toast({
-        title: "Camera Started",
-        description: "Point your camera at a QR code to scan it."
-      });
     } catch (error) {
       console.error('Camera error:', error);
+      setIsInitializingCamera(false);
       toast({
         title: "Camera Error",
         description: "Unable to access camera. Please check permissions or use manual input.",
@@ -146,8 +179,13 @@ const Scanner = () => {
   };
 
   const stopCamera = () => {
+    console.log('Stopping camera...');
+    
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        track.stop();
+        console.log('Camera track stopped');
+      });
       setStream(null);
     }
     
@@ -254,6 +292,7 @@ const Scanner = () => {
                           autoPlay
                           playsInline
                           muted
+                          style={{ display: 'block' }}
                         />
                         <canvas
                           ref={canvasRef}
@@ -271,8 +310,17 @@ const Scanner = () => {
                     ) : (
                       <div className="flex items-center justify-center h-full">
                         <div className="text-center">
-                          <Camera className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-600">Camera not active</p>
+                          {isInitializingCamera ? (
+                            <>
+                              <Loader2 className="h-16 w-16 text-purple-600 mx-auto mb-4 animate-spin" />
+                              <p className="text-gray-600">Initializing camera...</p>
+                            </>
+                          ) : (
+                            <>
+                              <Camera className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                              <p className="text-gray-600">Camera not active</p>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
@@ -280,9 +328,22 @@ const Scanner = () => {
                   
                   <div className="flex gap-2">
                     {!isScanning ? (
-                      <Button onClick={startCamera} className="flex-1">
-                        <Camera className="mr-2 h-4 w-4" />
-                        Start Camera
+                      <Button 
+                        onClick={startCamera} 
+                        className="flex-1"
+                        disabled={isInitializingCamera}
+                      >
+                        {isInitializingCamera ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Starting...
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="mr-2 h-4 w-4" />
+                            Start Camera
+                          </>
+                        )}
                       </Button>
                     ) : (
                       <Button onClick={stopCamera} variant="outline" className="flex-1">
