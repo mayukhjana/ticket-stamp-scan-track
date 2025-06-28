@@ -24,6 +24,10 @@ interface Event {
   totalTickets: number;
   scannedTickets: number;
   qrCodes: string[];
+  templateImage?: string;
+  qrPositionX?: number;
+  qrPositionY?: number;
+  qrSize?: number;
 }
 
 const Dashboard = () => {
@@ -104,6 +108,21 @@ const Dashboard = () => {
     }
   };
 
+  const handleTemplateUpdate = async (updates: { templateImage?: string; qrPositionX?: number; qrPositionY?: number; qrSize?: number }) => {
+    if (!selectedEvent) return;
+    
+    try {
+      await updateEvent(selectedEvent.id, updates);
+      setSelectedEvent({ ...selectedEvent, ...updates });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save template settings. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -178,9 +197,16 @@ const Dashboard = () => {
                       <Badge variant="outline">
                         {event.scannedTickets}/{event.totalTickets} scanned
                       </Badge>
-                      <Badge variant={event.qrCodes.length > 0 ? "default" : "secondary"}>
-                        {event.qrCodes.length > 0 ? "QR Ready" : "Setup Needed"}
-                      </Badge>
+                      <div className="flex gap-1">
+                        <Badge variant={event.qrCodes.length > 0 ? "default" : "secondary"}>
+                          {event.qrCodes.length > 0 ? "QR Ready" : "Setup Needed"}
+                        </Badge>
+                        {event.templateImage && (
+                          <Badge variant="outline" className="text-xs">
+                            Template ✓
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -316,7 +342,10 @@ const Dashboard = () => {
                 </TabsContent>
 
                 <TabsContent value="mockups">
-                  <TicketMockup event={selectedEvent} />
+                  <TicketMockup 
+                    event={selectedEvent} 
+                    onTemplateUpdate={handleTemplateUpdate}
+                  />
                 </TabsContent>
 
                 <TabsContent value="attendees">

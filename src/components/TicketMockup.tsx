@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,29 +15,57 @@ interface Event {
   totalTickets: number;
   scannedTickets: number;
   qrCodes: string[];
+  templateImage?: string;
+  qrPositionX?: number;
+  qrPositionY?: number;
+  qrSize?: number;
 }
 
 interface TicketMockupProps {
   event: Event;
+  onTemplateUpdate?: (updates: { templateImage?: string; qrPositionX?: number; qrPositionY?: number; qrSize?: number }) => void;
 }
 
-const TicketMockup = ({ event }: TicketMockupProps) => {
-  const [uploadedTemplate, setUploadedTemplate] = useState<string | null>(null);
-  const [qrPosition, setQrPosition] = useState({ x: 50, y: 50 });
-  const [qrSize, setQrSize] = useState(80);
+const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
+  const [uploadedTemplate, setUploadedTemplate] = useState<string | null>(event.templateImage || null);
+  const [qrPosition, setQrPosition] = useState({ 
+    x: event.qrPositionX || 50, 
+    y: event.qrPositionY || 50 
+  });
+  const [qrSize, setQrSize] = useState(event.qrSize || 80);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
+
+  // Update local state when event props change
+  useEffect(() => {
+    setUploadedTemplate(event.templateImage || null);
+    setQrPosition({ 
+      x: event.qrPositionX || 50, 
+      y: event.qrPositionY || 50 
+    });
+    setQrSize(event.qrSize || 80);
+  }, [event]);
 
   const handleTemplateUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        setUploadedTemplate(e.target?.result as string);
+        const templateData = e.target?.result as string;
+        setUploadedTemplate(templateData);
+        
+        // Save template to database
+        onTemplateUpdate?.({ 
+          templateImage: templateData,
+          qrPositionX: qrPosition.x,
+          qrPositionY: qrPosition.y,
+          qrSize: qrSize
+        });
+        
         toast({
           title: "Template Uploaded",
-          description: "Your ticket template has been uploaded successfully."
+          description: "Your ticket template has been uploaded and saved successfully."
         });
       };
       reader.readAsDataURL(file);
@@ -48,6 +76,29 @@ const TicketMockup = ({ event }: TicketMockupProps) => {
         variant: "destructive"
       });
     }
+  };
+
+  const handlePositionChange = (axis: 'x' | 'y', value: number) => {
+    const newPosition = { ...qrPosition, [axis]: value };
+    setQrPosition(newPosition);
+    
+    // Save position changes to database
+    onTemplateUpdate?.({ 
+      qrPositionX: newPosition.x,
+      qrPositionY: newPosition.y,
+      qrSize: qrSize
+    });
+  };
+
+  const handleSizeChange = (value: number) => {
+    setQrSize(value);
+    
+    // Save size changes to database
+    onTemplateUpdate?.({ 
+      qrPositionX: qrPosition.x,
+      qrPositionY: qrPosition.y,
+      qrSize: value
+    });
   };
 
   const generateMockup = (qrCodeIndex: number = 0) => {
@@ -154,7 +205,7 @@ const TicketMockup = ({ event }: TicketMockupProps) => {
             Ticket Template Upload
           </CardTitle>
           <CardDescription>
-            Upload your ticket design template and position QR codes automatically.
+            Upload your ticket design template and position QR codes automatically. Template settings are saved automatically.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -167,6 +218,9 @@ const TicketMockup = ({ event }: TicketMockupProps) => {
               onChange={handleTemplateUpload}
               ref={fileInputRef}
             />
+            {uploadedTemplate && (
+              <p className="text-sm text-green-600 mt-2">✓ Template saved and ready to use</p>
+            )}
           </div>
 
           {uploadedTemplate && (
@@ -181,7 +235,7 @@ const TicketMockup = ({ event }: TicketMockupProps) => {
                     min="0"
                     max="100"
                     value={qrPosition.x}
-                    onChange={(e) => setQrPosition({...qrPosition, x: parseInt(e.target.value)})}
+                    onChange={(e) => handlePositionChange('x', parseInt(e.target.value))}
                   />
                   <span className="text-sm text-gray-600">{qrPosition.x}%</span>
                 </div>
@@ -193,7 +247,7 @@ const TicketMockup = ({ event }: TicketMockupProps) => {
                     min="0"
                     max="100"
                     value={qrPosition.y}
-                    onChange={(e) => setQrPosition({...qrPosition, y: parseInt(e.target.value)})}
+                    onChange={(e) => handlePositionChange('y', parseInt(e.target.value))}
                   />
                   <span className="text-sm text-gray-600">{qrPosition.y}%</span>
                 </div>
@@ -205,7 +259,7 @@ const TicketMockup = ({ event }: TicketMockupProps) => {
                     min="5"
                     max="50"
                     value={qrSize}
-                    onChange={(e) => setQrSize(parseInt(e.target.value))}
+                    onChange={(e) => handleSizeChange(parseInt(e.target.value))}
                   />
                   <span className="text-sm text-gray-600">{qrSize}%</span>
                 </div>

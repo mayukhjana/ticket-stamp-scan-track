@@ -17,7 +17,11 @@ export type Database = {
           id: string
           name: string
           qr_codes: Json | null
+          qr_position_x: number | null
+          qr_position_y: number | null
+          qr_size: number | null
           scanned_tickets: number
+          template_image: string | null
           total_tickets: number
           updated_at: string
           user_id: string
@@ -29,7 +33,11 @@ export type Database = {
           id?: string
           name: string
           qr_codes?: Json | null
+          qr_position_x?: number | null
+          qr_position_y?: number | null
+          qr_size?: number | null
           scanned_tickets?: number
+          template_image?: string | null
           total_tickets?: number
           updated_at?: string
           user_id: string
@@ -41,7 +49,11 @@ export type Database = {
           id?: string
           name?: string
           qr_codes?: Json | null
+          qr_position_x?: number | null
+          qr_position_y?: number | null
+          qr_size?: number | null
           scanned_tickets?: number
+          template_image?: string | null
           total_tickets?: number
           updated_at?: string
           user_id?: string

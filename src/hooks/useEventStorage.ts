@@ -11,6 +11,10 @@ interface Event {
   totalTickets: number;
   scannedTickets: number;
   qrCodes: string[];
+  templateImage?: string;
+  qrPositionX?: number;
+  qrPositionY?: number;
+  qrSize?: number;
 }
 
 // Helper function to safely convert Json to string array
@@ -51,7 +55,11 @@ export const useEventStorage = () => {
         description: event.description || '',
         totalTickets: event.total_tickets,
         scannedTickets: event.scanned_tickets,
-        qrCodes: safeJsonToStringArray(event.qr_codes)
+        qrCodes: safeJsonToStringArray(event.qr_codes),
+        templateImage: event.template_image || undefined,
+        qrPositionX: event.qr_position_x || 50,
+        qrPositionY: event.qr_position_y || 50,
+        qrSize: event.qr_size || 80
       }));
 
       setEvents(formattedEvents);
@@ -82,7 +90,11 @@ export const useEventStorage = () => {
           description: event.description,
           total_tickets: event.totalTickets,
           scanned_tickets: 0,
-          qr_codes: []
+          qr_codes: [],
+          template_image: event.templateImage || null,
+          qr_position_x: event.qrPositionX || 50,
+          qr_position_y: event.qrPositionY || 50,
+          qr_size: event.qrSize || 80
         })
         .select()
         .single();
@@ -96,7 +108,11 @@ export const useEventStorage = () => {
         description: data.description || '',
         totalTickets: data.total_tickets,
         scannedTickets: data.scanned_tickets,
-        qrCodes: safeJsonToStringArray(data.qr_codes)
+        qrCodes: safeJsonToStringArray(data.qr_codes),
+        templateImage: data.template_image || undefined,
+        qrPositionX: data.qr_position_x || 50,
+        qrPositionY: data.qr_position_y || 50,
+        qrSize: data.qr_size || 80
       };
 
       setEvents(prev => [newEvent, ...prev]);
@@ -118,6 +134,10 @@ export const useEventStorage = () => {
       if (updates.totalTickets !== undefined) updateData.total_tickets = updates.totalTickets;
       if (updates.scannedTickets !== undefined) updateData.scanned_tickets = updates.scannedTickets;
       if (updates.qrCodes !== undefined) updateData.qr_codes = updates.qrCodes;
+      if (updates.templateImage !== undefined) updateData.template_image = updates.templateImage;
+      if (updates.qrPositionX !== undefined) updateData.qr_position_x = updates.qrPositionX;
+      if (updates.qrPositionY !== undefined) updateData.qr_position_y = updates.qrPositionY;
+      if (updates.qrSize !== undefined) updateData.qr_size = updates.qrSize;
 
       const { error } = await supabase
         .from('events')
