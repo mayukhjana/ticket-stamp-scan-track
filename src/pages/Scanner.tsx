@@ -40,21 +40,12 @@ const Scanner = () => {
     }, 1500); // Give user time to see the success message
   }, []);
 
-  const { videoRef: hookVideoRef, canvasRef: hookCanvasRef } = useQRScanner({
+  const { startScanning, stopScanning } = useQRScanner({
+    videoRef,
+    canvasRef,
     onQRCodeDetected: handleQRCodeDetected,
-    isScanning,
-    autoCloseOnScan: true
+    isActive: isScanning
   });
-
-  // Properly sync refs between hook and component
-  useEffect(() => {
-    if (videoRef.current) {
-      (hookVideoRef as any).current = videoRef.current;
-    }
-    if (canvasRef.current) {
-      (hookCanvasRef as any).current = canvasRef.current;
-    }
-  }, [isScanning, hookVideoRef, hookCanvasRef]);
 
   // Refresh scan results periodically to sync with dashboard
   useEffect(() => {
@@ -147,56 +138,41 @@ const Scanner = () => {
     setIsInitializingCamera(true);
     
     try {
-      // Ensure video element is available before proceeding
+      // Wait a bit for React to render the video element
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       if (!videoRef.current) {
-        console.log('Video element not ready, waiting...');
-        // Wait a bit more for the element to be available
-        await new Promise(resolve => setTimeout(resolve, 200));
+        console.log('Video element still not ready, waiting longer...');
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         if (!videoRef.current) {
-          throw new Error('Video element is not available. Please try again.');
+          throw new Error('Video element is not available after waiting. Please refresh the page and try again.');
         }
       }
 
       console.log('Video element found, requesting camera access...');
       
-      // Try different camera constraints for better device compatibility
       let mediaStream: MediaStream | null = null;
       
-      // First try with environment camera (back camera)
+      // Try different camera constraints for better device compatibility
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
-            facingMode: { exact: 'environment' },
+            facingMode: { ideal: 'environment' },
             width: { ideal: 1280, min: 640 },
-            height: { ideal: 720, min: 480 },
-            aspectRatio: { ideal: 16/9 }
+            height: { ideal: 720, min: 480 }
           } 
         });
         console.log('Back camera access granted');
       } catch (backCameraError) {
-        console.log('Back camera not available, trying front camera...');
-        // Fallback to any available camera
-        try {
-          mediaStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-              facingMode: 'user',
-              width: { ideal: 1280, min: 640 },
-              height: { ideal: 720, min: 480 }
-            } 
-          });
-          console.log('Front camera access granted');
-        } catch (frontCameraError) {
-          console.log('Front camera not available, trying basic constraints...');
-          // Final fallback - basic video request
-          mediaStream = await navigator.mediaDevices.getUserMedia({ 
-            video: {
-              width: { ideal: 1280, min: 640 },
-              height: { ideal: 720, min: 480 }
-            }
-          });
-          console.log('Basic camera access granted');
-        }
+        console.log('Back camera not available, trying any camera...');
+        mediaStream = await navigator.mediaDevices.getUserMedia({ 
+          video: {
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 }
+          }
+        });
+        console.log('Camera access granted');
       }
       
       if (!mediaStream) {
@@ -218,56 +194,37 @@ const Scanner = () => {
       
       // Set up video element
       video.srcObject = mediaStream;
-      video.autoplay = true;
+      video.autoPlay = true;
       video.playsInline = true;
       video.muted = true;
       
-      // Wait for video to be ready with proper error handling
+      // Wait for video to be ready
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error('Video load timeout - camera may be in use by another application'));
-        }, 8000); // 8 second timeout
+          reject(new Error('Video load timeout'));
+        }, 10000);
         
-        const handleCanPlay = () => {
-          console.log('Video can play, starting playback...');
+        const handleReady = () => {
+          console.log('Video ready, dimensions:', video.videoWidth, 'x', video.videoHeight);
           clearTimeout(timeout);
-          video.removeEventListener('canplay', handleCanPlay);
-          video.removeEventListener('loadedmetadata', handleCanPlay);
-          video.removeEventListener('error', handleError);
+          video.removeEventListener('loadedmetadata', handleReady);
+          video.removeEventListener('canplay', handleReady);
           resolve();
         };
         
-        const handleError = (error: any) => {
-          console.error('Video error:', error);
-          clearTimeout(timeout);
-          video.removeEventListener('canplay', handleCanPlay);
-          video.removeEventListener('loadedmetadata', handleCanPlay);
-          video.removeEventListener('error', handleError);
-          reject(new Error('Video failed to load - please check camera permissions'));
-        };
+        video.addEventListener('loadedmetadata', handleReady);
+        video.addEventListener('canplay', handleReady);
         
-        video.addEventListener('canplay', handleCanPlay, { once: true });
-        video.addEventListener('loadedmetadata', handleCanPlay, { once: true });
-        video.addEventListener('error', handleError, { once: true });
-        
-        // If video is already ready
         if (video.readyState >= 2) {
-          handleCanPlay();
+          handleReady();
         }
       });
 
-      // Start video playback
-      try {
-        await video.play();
-        console.log('Video playing successfully, dimensions:', video.videoWidth, 'x', video.videoHeight);
-      } catch (playError) {
-        console.error('Play error:', playError);
-        throw new Error('Could not start video playback - camera may be restricted');
-      }
+      await video.play();
       
       setStream(mediaStream);
       setIsScanning(true);
-      setIsInitializingCamera(false);
+      startScanning();
       
       toast({
         title: "Camera Started",
@@ -276,7 +233,6 @@ const Scanner = () => {
 
     } catch (error) {
       console.error('Camera access error:', error);
-      setIsInitializingCamera(false);
       
       let errorMessage = "Unable to access camera. Please check permissions.";
       
@@ -289,11 +245,7 @@ const Scanner = () => {
             errorMessage = "No camera found on this device.";
             break;
           case 'NotReadableError':
-            errorMessage = "Camera is already in use by another application. Please close other apps and try again.";
-            break;
-          case 'OverconstrainedError':
-            errorMessage = "Camera doesn't support the requested settings. Trying again...";
-            // Don't retry automatically to avoid infinite loops
+            errorMessage = "Camera is already in use by another application.";
             break;
         }
       } else if (error instanceof Error) {
@@ -305,11 +257,15 @@ const Scanner = () => {
         description: errorMessage,
         variant: "destructive"
       });
+    } finally {
+      setIsInitializingCamera(false);
     }
   };
 
   const stopCamera = () => {
     console.log('Stopping camera...');
+    
+    stopScanning();
     
     if (stream) {
       stream.getTracks().forEach(track => {
@@ -422,12 +378,6 @@ const Scanner = () => {
                           autoPlay
                           playsInline
                           muted
-                          style={{ 
-                            display: 'block',
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                          }}
                         />
                         <canvas
                           ref={canvasRef}
