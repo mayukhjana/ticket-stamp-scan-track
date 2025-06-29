@@ -32,8 +32,16 @@ export const useQRScanner = ({ onQRCodeDetected, isScanning, autoCloseOnScan = f
     }
 
     // Set canvas dimensions to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const { videoWidth, videoHeight } = video;
+    if (videoWidth === 0 || videoHeight === 0) {
+      if (isScanning) {
+        animationRef.current = requestAnimationFrame(scanQRCode);
+      }
+      return;
+    }
+
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
 
     // Draw video frame to canvas
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -41,15 +49,15 @@ export const useQRScanner = ({ onQRCodeDetected, isScanning, autoCloseOnScan = f
     // Get image data from canvas
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
 
-    // Scan for QR code
+    // Scan for QR code with multiple attempts for better reliability
     const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: "dontInvert",
+      inversionAttempts: "attemptBoth",
     });
 
     if (qrCode && qrCode.data) {
       const currentTime = Date.now();
-      // Prevent duplicate detections within 1 second
-      if (qrCode.data !== lastDetectedCode || currentTime - lastDetectionTime > 1000) {
+      // Prevent duplicate detections within 2 seconds for better UX
+      if (qrCode.data !== lastDetectedCode || currentTime - lastDetectionTime > 2000) {
         console.log('QR Code detected:', qrCode.data);
         setLastDetectedCode(qrCode.data);
         setLastDetectionTime(currentTime);
@@ -71,20 +79,27 @@ export const useQRScanner = ({ onQRCodeDetected, isScanning, autoCloseOnScan = f
   useEffect(() => {
     if (isScanning) {
       console.log('Starting QR scan loop');
-      scanQRCode();
+      // Small delay to ensure video is ready
+      const timeout = setTimeout(() => {
+        scanQRCode();
+      }, 100);
+      return () => clearTimeout(timeout);
     } else {
       console.log('Stopping QR scan loop');
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     }
+  }, [isScanning, scanQRCode]);
 
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isScanning, scanQRCode]);
+  }, []);
 
   return { videoRef, canvasRef };
 };

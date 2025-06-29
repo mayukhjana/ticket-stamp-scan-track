@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +26,8 @@ const Scanner = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isInitializingCamera, setIsInitializingCamera] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
 
   const handleQRCodeDetected = useCallback(async (qrData: string) => {
@@ -39,11 +40,21 @@ const Scanner = () => {
     }, 1500); // Give user time to see the success message
   }, []);
 
-  const { videoRef, canvasRef } = useQRScanner({
+  const { videoRef: hookVideoRef, canvasRef: hookCanvasRef } = useQRScanner({
     onQRCodeDetected: handleQRCodeDetected,
     isScanning,
     autoCloseOnScan: true
   });
+
+  // Sync refs
+  useEffect(() => {
+    if (videoRef.current && hookVideoRef.current !== videoRef.current) {
+      (hookVideoRef as any).current = videoRef.current;
+    }
+    if (canvasRef.current && hookCanvasRef.current !== canvasRef.current) {
+      (hookCanvasRef as any).current = canvasRef.current;
+    }
+  }, [hookVideoRef, hookCanvasRef]);
 
   // Refresh scan results periodically to sync with dashboard
   useEffect(() => {
@@ -136,97 +147,114 @@ const Scanner = () => {
     setIsInitializingCamera(true);
     
     try {
+      // Wait for video element to be available
+      if (!videoRef.current) {
+        console.error('Video element not ready, waiting...');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (!videoRef.current) {
+          throw new Error('Video element not found after wait');
+        }
+      }
+
       console.log('Requesting camera access...');
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
+      
+      // Try different camera constraints for better device compatibility
+      let mediaStream: MediaStream | null = null;
+      
+      // First try with environment camera (back camera)
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: { exact: 'environment' },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
+            aspectRatio: { ideal: 16/9 }
+          } 
+        });
+      } catch (backCameraError) {
+        console.log('Back camera not available, trying front camera...');
+        // Fallback to any available camera
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: 'user',
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 }
+            } 
+          });
+        } catch (frontCameraError) {
+          console.log('Front camera not available, trying basic constraints...');
+          // Final fallback - basic video request
+          mediaStream = await navigator.mediaDevices.getUserMedia({ 
+            video: true 
+          });
+        }
+      }
+      
+      if (!mediaStream) {
+        throw new Error('Could not obtain camera stream');
+      }
       
       console.log('Camera stream obtained:', mediaStream);
       
-      if (videoRef.current) {
-        const video = videoRef.current;
+      const video = videoRef.current;
+      if (!video) {
+        throw new Error('Video element not found');
+      }
+      
+      // Stop any existing stream
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      
+      // Set up video element
+      video.srcObject = mediaStream;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      
+      // Wait for video to be ready
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Video load timeout'));
+        }, 10000); // 10 second timeout
         
-        // Clear any existing source
-        video.srcObject = null;
-        
-        // Set up video element properly
-        video.autoplay = true;
-        video.playsInline = true;
-        video.muted = true;
-        video.controls = false;
-        video.style.display = 'block';
-        video.style.width = '100%';
-        video.style.height = '100%';
-        video.style.objectFit = 'cover';
-        
-        // Set up event handlers before setting srcObject
-        const handleLoadStart = () => {
-          console.log('Video load started');
-        };
-
-        const handleLoadedData = () => {
-          console.log('Video data loaded, dimensions:', video.videoWidth, 'x', video.videoHeight);
-        };
-
         const handleCanPlay = () => {
-          console.log('Video can play');
-          video.play().then(() => {
-            console.log('Video playing successfully');
-            setStream(mediaStream);
-            setIsScanning(true);
-            setIsInitializingCamera(false);
-            
-            toast({
-              title: "Camera Started",
-              description: "Point your camera at a QR code to scan it."
-            });
-          }).catch((playError) => {
-            console.error('Error playing video:', playError);
-            setIsInitializingCamera(false);
-            toast({
-              title: "Playback Error",
-              description: "Failed to start video playback.",
-              variant: "destructive"
-            });
-          });
+          clearTimeout(timeout);
+          video.removeEventListener('canplay', handleCanPlay);
+          video.removeEventListener('error', handleError);
+          resolve();
         };
-
+        
         const handleError = (error: any) => {
-          console.error('Video error:', error);
-          setIsInitializingCamera(false);
-          toast({
-            title: "Video Error",
-            description: "Failed to initialize video stream.",
-            variant: "destructive"
-          });
+          clearTimeout(timeout);
+          video.removeEventListener('canplay', handleCanPlay);
+          video.removeEventListener('error', handleError);
+          reject(error);
         };
-
-        // Add event listeners
-        video.addEventListener('loadstart', handleLoadStart, { once: true });
-        video.addEventListener('loadeddata', handleLoadedData, { once: true });
+        
         video.addEventListener('canplay', handleCanPlay, { once: true });
         video.addEventListener('error', handleError, { once: true });
         
-        // Set the source - this should trigger the load events
-        console.log('Setting video srcObject...');
-        video.srcObject = mediaStream;
-        
-        // Force load if needed
-        video.load();
+        // If video is already ready
+        if (video.readyState >= 3) {
+          handleCanPlay();
+        }
+      });
 
-      } else {
-        console.error('Video ref is null');
-        setIsInitializingCamera(false);
-        toast({
-          title: "Video Error",
-          description: "Video element not found.",
-          variant: "destructive"
-        });
-      }
+      // Start video playback
+      await video.play();
+      
+      console.log('Video playing successfully, dimensions:', video.videoWidth, 'x', video.videoHeight);
+      
+      setStream(mediaStream);
+      setIsScanning(true);
+      setIsInitializingCamera(false);
+      
+      toast({
+        title: "Camera Started",
+        description: "Point your camera at a QR code to scan it."
+      });
 
     } catch (error) {
       console.error('Camera access error:', error);
@@ -245,7 +273,14 @@ const Scanner = () => {
           case 'NotReadableError':
             errorMessage = "Camera is already in use by another application.";
             break;
+          case 'OverconstrainedError':
+            errorMessage = "Camera constraints not supported. Trying with basic settings...";
+            // Retry with basic constraints
+            setTimeout(() => startCamera(), 1000);
+            return;
         }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
       }
 
       toast({
@@ -269,7 +304,6 @@ const Scanner = () => {
     
     if (videoRef.current) {
       videoRef.current.srcObject = null;
-      videoRef.current.style.display = 'none';
     }
     
     setIsScanning(false);
@@ -371,6 +405,7 @@ const Scanner = () => {
                           autoPlay
                           playsInline
                           muted
+                          style={{ display: 'block' }}
                         />
                         <canvas
                           ref={canvasRef}
