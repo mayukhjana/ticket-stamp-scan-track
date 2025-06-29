@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ interface ScanResult {
 
 const Scanner = () => {
   const { user, signOut } = useAuth();
-  const { scanResults, addScanResult, isLoading } = useScanResults();
+  const { scanResults, addScanResult, isLoading, loadScanResults } = useScanResults();
   const [manualInput, setManualInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -31,12 +31,29 @@ const Scanner = () => {
   const handleQRCodeDetected = useCallback(async (qrData: string) => {
     console.log('Processing QR code:', qrData);
     await processQRCode(qrData);
+    
+    // Auto-close camera after successful scan
+    setTimeout(() => {
+      stopCamera();
+    }, 1500); // Give user time to see the success message
   }, []);
 
   const { videoRef, canvasRef } = useQRScanner({
     onQRCodeDetected: handleQRCodeDetected,
-    isScanning
+    isScanning,
+    autoCloseOnScan: true
   });
+
+  // Refresh scan results periodically to sync with dashboard
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isLoading) {
+        loadScanResults();
+      }
+    }, 5000); // Refresh every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [isLoading, loadScanResults]);
 
   const handleSignOut = async () => {
     try {
@@ -76,7 +93,7 @@ const Scanner = () => {
       await addScanResult(scanResultData);
 
       toast({
-        title: scanResultData.status === 'valid' ? "Valid Ticket" : "Duplicate Ticket",
+        title: scanResultData.status === 'valid' ? "✅ Valid Ticket" : "⚠️ Duplicate Ticket",
         description: scanResultData.message,
         variant: scanResultData.status === 'valid' ? "default" : "destructive"
       });
@@ -92,7 +109,7 @@ const Scanner = () => {
       await addScanResult(scanResultData);
 
       toast({
-        title: "Invalid QR Code",
+        title: "❌ Invalid QR Code",
         description: "This QR code is not a valid ticket.",
         variant: "destructive"
       });
@@ -294,7 +311,7 @@ const Scanner = () => {
       <div className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-3xl font-bold text-gray-900">QR Code Scanner</h1>
-          <p className="text-gray-600 mt-1">Scan tickets and validate attendance</p>
+          <p className="text-gray-600 mt-1">Scan tickets and validate attendance - Camera closes automatically after each scan</p>
         </div>
       </div>
 
@@ -309,7 +326,7 @@ const Scanner = () => {
                   QR Code Scanner
                 </CardTitle>
                 <CardDescription>
-                  Use camera to scan QR codes or enter manually
+                  Use camera to scan QR codes or enter manually. Camera closes automatically after each successful scan.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -343,6 +360,9 @@ const Scanner = () => {
                             <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-purple-500 rounded-br-lg"></div>
                           </div>
                         </div>
+                        <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
+                          🎯 Scanning... Point at QR code
+                        </div>
                       </>
                     ) : (
                       <div className="flex items-center justify-center h-full">
@@ -356,6 +376,7 @@ const Scanner = () => {
                             <>
                               <Camera className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                               <p className="text-gray-600">Camera not active</p>
+                              <p className="text-sm text-gray-500 mt-2">Auto-closes after each scan</p>
                             </>
                           )}
                         </div>
@@ -438,7 +459,7 @@ const Scanner = () => {
               <CardHeader>
                 <CardTitle>Recent Scans</CardTitle>
                 <CardDescription>
-                  Real-time scan results and validation status
+                  Real-time scan results and validation status (synced with dashboard)
                 </CardDescription>
               </CardHeader>
               <CardContent>

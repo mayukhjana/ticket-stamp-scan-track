@@ -7,11 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket, LogOut, Loader2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket, LogOut, Loader2, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEventStorage } from "@/hooks/useEventStorage";
+import { useScanResults } from "@/hooks/useScanResults";
 import QRCodeGenerator from "@/components/QRCodeGenerator";
 import TicketMockup from "@/components/TicketMockup";
 import AttendeeList from "@/components/AttendeeList";
@@ -33,6 +35,7 @@ interface Event {
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const { events, addEvent, updateEvent, isLoading } = useEventStorage();
+  const { scanResults, loadScanResults } = useScanResults();
   
   const [newEvent, setNewEvent] = useState({
     name: "",
@@ -43,13 +46,25 @@ const Dashboard = () => {
   
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isNewEventOpen, setIsNewEventOpen] = useState(false);
   const { toast } = useToast();
 
-  // Update selectedEvent when events load
+  // Update selectedEvent when events load and sync scan data
   useState(() => {
     if (!selectedEvent && events.length > 0) {
       setSelectedEvent(events[0]);
     }
+    // Refresh scan results to sync with scanner
+    loadScanResults();
+  });
+
+  // Refresh data periodically to stay synced
+  useState(() => {
+    const interval = setInterval(() => {
+      loadScanResults();
+    }, 5000);
+
+    return () => clearInterval(interval);
   });
 
   const handleSignOut = async () => {
@@ -165,7 +180,7 @@ const Dashboard = () => {
       <div className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-3xl font-bold text-gray-900">Event Dashboard</h1>
-          <p className="text-gray-600 mt-1">Manage your events and track attendance</p>
+          <p className="text-gray-600 mt-1">Manage your events and track attendance (synced with scanner)</p>
         </div>
       </div>
 
@@ -219,69 +234,107 @@ const Dashboard = () => {
                   </div>
                 )}
 
-                {/* Create New Event Form */}
-                <Card className="mt-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <Plus className="h-4 w-4" />
-                      New Event
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label htmlFor="eventName">Event Name *</Label>
-                      <Input
-                        id="eventName"
-                        value={newEvent.name}
-                        onChange={(e) => setNewEvent({...newEvent, name: e.target.value})}
-                        placeholder="Enter event name"
-                      />
+                {/* Collapsible Create New Event Form */}
+                <Collapsible open={isNewEventOpen} onOpenChange={setIsNewEventOpen}>
+                  <Card className="mt-6">
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="cursor-pointer hover:bg-gray-50 transition-colors">
+                        <CardTitle className="flex items-center justify-between text-lg">
+                          <div className="flex items-center gap-2">
+                            <Plus className="h-4 w-4" />
+                            New Event
+                          </div>
+                          <ChevronDown className={`h-4 w-4 transition-transform ${isNewEventOpen ? 'rotate-180' : ''}`} />
+                        </CardTitle>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="space-y-4 pt-0">
+                        <div>
+                          <Label htmlFor="eventName">Event Name *</Label>
+                          <Input
+                            id="eventName"
+                            value={newEvent.name}
+                            onChange={(e) => setNewEvent({...newEvent, name: e.target.value})}
+                            placeholder="Enter event name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="eventDate">Date *</Label>
+                          <Input
+                            id="eventDate"
+                            type="date"
+                            value={newEvent.date}
+                            onChange={(e) => setNewEvent({...newEvent, date: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="ticketCount">Number of Tickets *</Label>
+                          <Input
+                            id="ticketCount"
+                            type="number"
+                            value={newEvent.ticketCount}
+                            onChange={(e) => setNewEvent({...newEvent, ticketCount: e.target.value})}
+                            placeholder="e.g., 100"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="eventDesc">Description</Label>
+                          <Textarea
+                            id="eventDesc"
+                            value={newEvent.description}
+                            onChange={(e) => setNewEvent({...newEvent, description: e.target.value})}
+                            placeholder="Event description..."
+                            rows={3}
+                          />
+                        </div>
+                        <Button 
+                          onClick={handleCreateEvent} 
+                          className="w-full"
+                          disabled={isCreating}
+                        >
+                          {isCreating ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            'Create Event'
+                          )}
+                        </Button>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              </CardContent>
+            </Card>
+
+            {/* Real-time Scan Statistics */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <QrCode className="h-5 w-5" />
+                  Recent Scans
+                </CardTitle>
+                <CardDescription>Live data from scanner</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {scanResults.slice(0, 5).map((result) => (
+                    <div key={result.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div>
+                        <p className="text-sm font-medium">{result.eventName}</p>
+                        <p className="text-xs text-gray-600">Ticket #{result.ticketNumber}</p>
+                      </div>
+                      <Badge variant={result.status === 'valid' ? 'default' : result.status === 'duplicate' ? 'secondary' : 'destructive'} className="text-xs">
+                        {result.status}
+                      </Badge>
                     </div>
-                    <div>
-                      <Label htmlFor="eventDate">Date *</Label>
-                      <Input
-                        id="eventDate"
-                        type="date"
-                        value={newEvent.date}
-                        onChange={(e) => setNewEvent({...newEvent, date: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="ticketCount">Number of Tickets *</Label>
-                      <Input
-                        id="ticketCount"
-                        type="number"
-                        value={newEvent.ticketCount}
-                        onChange={(e) => setNewEvent({...newEvent, ticketCount: e.target.value})}
-                        placeholder="e.g., 100"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="eventDesc">Description</Label>
-                      <Textarea
-                        id="eventDesc"
-                        value={newEvent.description}
-                        onChange={(e) => setNewEvent({...newEvent, description: e.target.value})}
-                        placeholder="Event description..."
-                        rows={3}
-                      />
-                    </div>
-                    <Button 
-                      onClick={handleCreateEvent} 
-                      className="w-full"
-                      disabled={isCreating}
-                    >
-                      {isCreating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        'Create Event'
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
+                  ))}
+                  {scanResults.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4">No scans yet</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>

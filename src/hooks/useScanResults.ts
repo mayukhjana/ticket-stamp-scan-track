@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -18,7 +18,7 @@ export const useScanResults = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Load scan results from Supabase
-  const loadScanResults = async () => {
+  const loadScanResults = useCallback(async () => {
     if (!user) {
       setScanResults([]);
       setIsLoading(false);
@@ -51,11 +51,45 @@ export const useScanResults = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
   // Load scan results when user changes
   useEffect(() => {
     loadScanResults();
+  }, [loadScanResults]);
+
+  // Set up real-time subscription for scan results
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('scan-results-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'scan_results',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('New scan result:', payload);
+          const newResult = {
+            id: payload.new.id,
+            eventName: payload.new.event_name,
+            ticketNumber: payload.new.ticket_number,
+            scanTime: new Date(payload.new.scan_time).toLocaleString(),
+            status: payload.new.status as 'valid' | 'invalid' | 'duplicate',
+            message: payload.new.message
+          };
+          setScanResults(prev => [newResult, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const addScanResult = async (result: Omit<ScanResult, 'id' | 'scanTime'>) => {
@@ -85,7 +119,7 @@ export const useScanResults = () => {
         message: data.message
       };
 
-      setScanResults(prev => [newResult, ...prev]);
+      // Don't add to state here since real-time subscription will handle it
       return newResult;
     } catch (error) {
       console.error('Error adding scan result:', error);
