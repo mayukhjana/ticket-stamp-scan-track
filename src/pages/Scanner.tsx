@@ -1,3 +1,4 @@
+
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -147,28 +148,34 @@ const Scanner = () => {
       console.log('Camera stream obtained:', mediaStream);
       
       if (videoRef.current) {
-        console.log('Attaching stream to video element...');
         const video = videoRef.current;
         
-        // Set video properties before attaching stream
-        video.setAttribute('playsinline', 'true');
-        video.setAttribute('autoplay', 'true');
-        video.setAttribute('muted', 'true');
+        // Clear any existing source
+        video.srcObject = null;
+        
+        // Set up video element properly
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.controls = false;
         video.style.display = 'block';
         video.style.width = '100%';
         video.style.height = '100%';
         video.style.objectFit = 'cover';
         
-        video.srcObject = mediaStream;
-        
-        const handleLoadedMetadata = () => {
-          console.log('Video metadata loaded, video dimensions:', video.videoWidth, 'x', video.videoHeight);
-          
-          // Ensure video is visible and properly sized
-          video.style.visibility = 'visible';
-          
+        // Set up event handlers before setting srcObject
+        const handleLoadStart = () => {
+          console.log('Video load started');
+        };
+
+        const handleLoadedData = () => {
+          console.log('Video data loaded, dimensions:', video.videoWidth, 'x', video.videoHeight);
+        };
+
+        const handleCanPlay = () => {
+          console.log('Video can play');
           video.play().then(() => {
-            console.log('Video playing successfully, readyState:', video.readyState);
+            console.log('Video playing successfully');
             setStream(mediaStream);
             setIsScanning(true);
             setIsInitializingCamera(false);
@@ -177,11 +184,11 @@ const Scanner = () => {
               title: "Camera Started",
               description: "Point your camera at a QR code to scan it."
             });
-          }).catch((error) => {
-            console.error('Error playing video:', error);
+          }).catch((playError) => {
+            console.error('Error playing video:', playError);
             setIsInitializingCamera(false);
             toast({
-              title: "Camera Error",
+              title: "Playback Error",
               description: "Failed to start video playback.",
               variant: "destructive"
             });
@@ -198,29 +205,52 @@ const Scanner = () => {
           });
         };
 
-        const handleCanPlay = () => {
-          console.log('Video can play, attempting to play...');
-          video.play().catch(console.error);
-        };
-
         // Add event listeners
-        video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
-        video.addEventListener('error', handleError, { once: true });
+        video.addEventListener('loadstart', handleLoadStart, { once: true });
+        video.addEventListener('loadeddata', handleLoadedData, { once: true });
         video.addEventListener('canplay', handleCanPlay, { once: true });
+        video.addEventListener('error', handleError, { once: true });
         
-        // Force load if metadata is already available
-        if (video.readyState >= 1) {
-          console.log('Video metadata already loaded, triggering handler');
-          handleLoadedMetadata();
-        }
+        // Set the source - this should trigger the load events
+        console.log('Setting video srcObject...');
+        video.srcObject = mediaStream;
+        
+        // Force load if needed
+        video.load();
+
+      } else {
+        console.error('Video ref is null');
+        setIsInitializingCamera(false);
+        toast({
+          title: "Video Error",
+          description: "Video element not found.",
+          variant: "destructive"
+        });
       }
 
     } catch (error) {
       console.error('Camera access error:', error);
       setIsInitializingCamera(false);
+      
+      let errorMessage = "Unable to access camera. Please check permissions.";
+      
+      if (error instanceof DOMException) {
+        switch (error.name) {
+          case 'NotAllowedError':
+            errorMessage = "Camera access denied. Please allow camera permissions and try again.";
+            break;
+          case 'NotFoundError':
+            errorMessage = "No camera found on this device.";
+            break;
+          case 'NotReadableError':
+            errorMessage = "Camera is already in use by another application.";
+            break;
+        }
+      }
+
       toast({
         title: "Camera Error",
-        description: "Unable to access camera. Please check permissions or use manual input.",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -337,16 +367,10 @@ const Scanner = () => {
                       <>
                         <video
                           ref={videoRef}
-                          className="w-full h-full object-cover block"
+                          className="w-full h-full object-cover"
                           autoPlay
                           playsInline
                           muted
-                          style={{ 
-                            display: 'block',
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                          }}
                         />
                         <canvas
                           ref={canvasRef}
@@ -371,6 +395,7 @@ const Scanner = () => {
                             <>
                               <Loader2 className="h-16 w-16 text-purple-600 mx-auto mb-4 animate-spin" />
                               <p className="text-gray-600">Initializing camera...</p>
+                              <p className="text-sm text-gray-500 mt-2">This may take a few seconds</p>
                             </>
                           ) : (
                             <>
