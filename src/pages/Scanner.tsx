@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQRScanner } from "@/hooks/useQRScanner";
 import { useScanResults } from "@/hooks/useScanResults";
+import jsQR from 'jsqr';
 
 interface ScanResult {
   id: string;
@@ -21,42 +22,22 @@ interface ScanResult {
 
 const Scanner = () => {
   const { user, signOut } = useAuth();
-  const { scanResults, addScanResult, isLoading, loadScanResults } = useScanResults();
+  const { scanResults, addScanResult, isLoading } = useScanResults();
   const [manualInput, setManualInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isInitializingCamera, setIsInitializingCamera] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
 
   const handleQRCodeDetected = useCallback(async (qrData: string) => {
-    console.log('Processing QR code:', qrData);
+    console.log('Raw QR data:', qrData);
     await processQRCode(qrData);
-    
-    // Auto-close camera after successful scan
-    setTimeout(() => {
-      stopCamera();
-    }, 1500); // Give user time to see the success message
-  }, []);
+  }, [scanResults]);
 
-  const { startScanning, stopScanning } = useQRScanner({
-    videoRef,
-    canvasRef,
+  const { videoRef, canvasRef } = useQRScanner({
     onQRCodeDetected: handleQRCodeDetected,
-    isActive: isScanning
+    isScanning
   });
-
-  // Refresh scan results periodically to sync with dashboard
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isLoading) {
-        loadScanResults();
-      }
-    }, 5000); // Refresh every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [isLoading, loadScanResults]);
 
   const handleSignOut = async () => {
     try {
@@ -96,7 +77,7 @@ const Scanner = () => {
       await addScanResult(scanResultData);
 
       toast({
-        title: scanResultData.status === 'valid' ? "✅ Valid Ticket" : "⚠️ Duplicate Ticket",
+        title: scanResultData.status === 'valid' ? "Valid Ticket" : "Duplicate Ticket",
         description: scanResultData.message,
         variant: scanResultData.status === 'valid' ? "default" : "destructive"
       });
@@ -112,8 +93,8 @@ const Scanner = () => {
       await addScanResult(scanResultData);
 
       toast({
-        title: "❌ Invalid QR Code",
-        description: "This QR code is not a valid ticket.",
+        title: "Invalid QR Code",
+        description: "This QR code is not a valid ticket or event.",
         variant: "destructive"
       });
     }
@@ -134,138 +115,36 @@ const Scanner = () => {
   };
 
   const startCamera = async () => {
-    console.log('Starting camera initialization...');
-    setIsInitializingCamera(true);
-    
     try {
-      // Wait a bit for React to render the video element
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      if (!videoRef.current) {
-        console.log('Video element still not ready, waiting longer...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        if (!videoRef.current) {
-          throw new Error('Video element is not available after waiting. Please refresh the page and try again.');
-        }
-      }
-
-      console.log('Video element found, requesting camera access...');
-      
-      let mediaStream: MediaStream | null = null;
-      
-      // Try different camera constraints for better device compatibility
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280, min: 640 },
-            height: { ideal: 720, min: 480 }
-          } 
-        });
-        console.log('Back camera access granted');
-      } catch (backCameraError) {
-        console.log('Back camera not available, trying any camera...');
-        mediaStream = await navigator.mediaDevices.getUserMedia({ 
-          video: {
-            width: { ideal: 1280, min: 640 },
-            height: { ideal: 720, min: 480 }
-          }
-        });
-        console.log('Camera access granted');
-      }
-      
-      if (!mediaStream) {
-        throw new Error('Could not obtain camera stream');
-      }
-      
-      console.log('Camera stream obtained, setting up video element...');
-      
-      const video = videoRef.current;
-      if (!video) {
-        mediaStream.getTracks().forEach(track => track.stop());
-        throw new Error('Video element became unavailable');
-      }
-      
-      // Stop any existing stream
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-      
-      // Set up video element
-      video.srcObject = mediaStream;
-      video.autoPlay = true;
-      video.playsInline = true;
-      video.muted = true;
-      
-      // Wait for video to be ready
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Video load timeout'));
-        }, 10000);
-        
-        const handleReady = () => {
-          console.log('Video ready, dimensions:', video.videoWidth, 'x', video.videoHeight);
-          clearTimeout(timeout);
-          video.removeEventListener('loadedmetadata', handleReady);
-          video.removeEventListener('canplay', handleReady);
-          resolve();
-        };
-        
-        video.addEventListener('loadedmetadata', handleReady);
-        video.addEventListener('canplay', handleReady);
-        
-        if (video.readyState >= 2) {
-          handleReady();
+      console.log("Requesting camera access...");
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         }
       });
-
-      await video.play();
-      
+      console.log("Camera stream obtained:", mediaStream);
       setStream(mediaStream);
+      console.log('setStream called');
       setIsScanning(true);
-      startScanning();
-      
+      console.log('setIsScanning(true) called');
       toast({
         title: "Camera Started",
         description: "Point your camera at a QR code to scan it."
       });
-
     } catch (error) {
-      console.error('Camera access error:', error);
-      
-      let errorMessage = "Unable to access camera. Please check permissions.";
-      
-      if (error instanceof DOMException) {
-        switch (error.name) {
-          case 'NotAllowedError':
-            errorMessage = "Camera access denied. Please allow camera permissions and refresh the page.";
-            break;
-          case 'NotFoundError':
-            errorMessage = "No camera found on this device.";
-            break;
-          case 'NotReadableError':
-            errorMessage = "Camera is already in use by another application.";
-            break;
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-
+      console.error('Camera error:', error);
       toast({
         title: "Camera Error",
-        description: errorMessage,
+        description: "Unable to access camera. Please check permissions or use manual input.",
         variant: "destructive"
       });
-    } finally {
-      setIsInitializingCamera(false);
     }
   };
 
   const stopCamera = () => {
     console.log('Stopping camera...');
-    
-    stopScanning();
     
     if (stream) {
       stream.getTracks().forEach(track => {
@@ -277,6 +156,7 @@ const Scanner = () => {
     
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+      videoRef.current.style.display = 'none';
     }
     
     setIsScanning(false);
@@ -317,6 +197,40 @@ const Scanner = () => {
   const duplicateScans = scanResults.filter(r => r.status === 'duplicate').length;
   const invalidScans = scanResults.filter(r => r.status === 'invalid').length;
 
+  useEffect(() => {
+    async function attachStream() {
+      if (isScanning && videoRef.current && stream) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.playsInline = true;
+        videoRef.current.muted = true;
+        videoRef.current.autoplay = true;
+        try {
+          await videoRef.current.play();
+          console.log("Camera stream attached and playing (from useEffect).");
+        } catch (err: unknown) {
+          console.warn("Initial video play failed, retrying in 500ms", err);
+          setTimeout(async () => {
+            try {
+              await videoRef.current!.play();
+              console.log("Camera stream playing after retry.");
+            } catch (err2: unknown) {
+              console.error("Video play still failed:", err2);
+            }
+          }, 500);
+        }
+      }
+    }
+    attachStream();
+  }, [isScanning, stream, videoRef]);
+
+  useEffect(() => {
+    console.log('isScanning changed:', isScanning);
+  }, [isScanning]);
+
+  useEffect(() => {
+    console.log('stream changed:', stream);
+  }, [stream]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -348,7 +262,7 @@ const Scanner = () => {
       <div className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-3xl font-bold text-gray-900">QR Code Scanner</h1>
-          <p className="text-gray-600 mt-1">Scan tickets and validate attendance - Camera closes automatically after each scan</p>
+          <p className="text-gray-600 mt-1">Scan tickets and validate attendance</p>
         </div>
       </div>
 
@@ -363,13 +277,13 @@ const Scanner = () => {
                   QR Code Scanner
                 </CardTitle>
                 <CardDescription>
-                  Use camera to scan QR codes or enter manually. Camera closes automatically after each successful scan.
+                  Use camera to scan QR codes or enter manually
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Camera Scanner */}
                 <div className="space-y-4">
-                  <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative border-2 border-gray-200">
+                  <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative">
                     {isScanning ? (
                       <>
                         <video
@@ -378,67 +292,82 @@ const Scanner = () => {
                           autoPlay
                           playsInline
                           muted
+                          style={{ background: '#222' }}
                         />
                         <canvas
                           ref={canvasRef}
                           className="hidden"
                         />
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-64 h-64 border-2 border-white rounded-lg shadow-lg">
-                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-purple-500 rounded-tl-lg"></div>
-                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-purple-500 rounded-tr-lg"></div>
-                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-purple-500 rounded-bl-lg"></div>
-                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-purple-500 rounded-br-lg"></div>
+                        {/* Improved Overlay */}
+                        <div className="absolute inset-0 pointer-events-none">
+                          <div className="absolute inset-0 bg-black bg-opacity-50" />
+                          <div
+                            className="absolute left-1/2 top-1/2"
+                            style={{
+                              width: 'min(256px, 80vw)',
+                              height: 'min(256px, 80vw)',
+                              transform: 'translate(-50%, -50%)',
+                              boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
+                              border: '4px solid #a855f7',
+                              borderRadius: '16px',
+                              background: 'transparent',
+                              maxWidth: 'calc(100vw - 32px)',
+                              maxHeight: 'calc(100vh - 200px)',
+                            }}
+                          >
+                            <div className="absolute top-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-l-4 border-purple-500 rounded-tl-lg" />
+                            <div className="absolute top-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-r-4 border-purple-500 rounded-tr-lg" />
+                            <div className="absolute bottom-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-l-4 border-purple-500 rounded-bl-lg" />
+                            <div className="absolute bottom-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-r-4 border-purple-500 rounded-br-lg" />
                           </div>
-                        </div>
-                        <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
-                          🎯 Scanning... Point at QR code
                         </div>
                       </>
                     ) : (
                       <div className="flex items-center justify-center h-full">
                         <div className="text-center">
-                          {isInitializingCamera ? (
-                            <>
-                              <Loader2 className="h-16 w-16 text-purple-600 mx-auto mb-4 animate-spin" />
-                              <p className="text-gray-600">Initializing camera...</p>
-                              <p className="text-sm text-gray-500 mt-2">This may take a few seconds</p>
-                            </>
-                          ) : (
-                            <>
-                              <Camera className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                              <p className="text-gray-600">Camera not active</p>
-                              <p className="text-sm text-gray-500 mt-2">Auto-closes after each scan</p>
-                            </>
-                          )}
+                          <Camera className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-600">Camera not active</p>
                         </div>
                       </div>
                     )}
                   </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 mt-2">
                     {!isScanning ? (
-                      <Button 
-                        onClick={startCamera} 
-                        className="flex-1"
-                        disabled={isInitializingCamera}
-                      >
-                        {isInitializingCamera ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Starting...
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="mr-2 h-4 w-4" />
-                            Start Camera
-                          </>
-                        )}
+                      <Button onClick={startCamera} className="flex-1">
+                        <Camera className="mr-2 h-4 w-4" />
+                        Start Camera
                       </Button>
                     ) : (
-                      <Button onClick={stopCamera} variant="outline" className="flex-1">
-                        Stop Camera
-                      </Button>
+                      <>
+                        <Button onClick={stopCamera} variant="outline" className="flex-1">
+                          Stop Camera
+                        </Button>
+                        <Button onClick={() => {
+                          // Manual scan attempt
+                          if (videoRef.current && canvasRef.current) {
+                            const video = videoRef.current;
+                            const canvas = canvasRef.current;
+                            const context = canvas.getContext('2d');
+                            if (context && video.readyState === video.HAVE_ENOUGH_DATA) {
+                              canvas.width = video.videoWidth;
+                              canvas.height = video.videoHeight;
+                              context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                              const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                              // jsQR is used here; can swap to zxing-js/browser for more robust scanning
+                              const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+                              console.log('Manual scan attempt, QR result:', qrCode);
+                              if (qrCode) {
+                                handleQRCodeDetected(qrCode.data);
+                              } else {
+                                toast({ title: 'No QR code found', description: 'Try again or adjust the ticket position.', variant: 'destructive' });
+                              }
+                            }
+                          }
+                        }} variant="secondary" className="flex-1">
+                          Scan Now
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -491,7 +420,7 @@ const Scanner = () => {
               <CardHeader>
                 <CardTitle>Recent Scans</CardTitle>
                 <CardDescription>
-                  Real-time scan results and validation status (synced with dashboard)
+                  Real-time scan results and validation status
                 </CardDescription>
               </CardHeader>
               <CardContent>
