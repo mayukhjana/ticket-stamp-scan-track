@@ -28,6 +28,19 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
   const [batchSize, setBatchSize] = useState(event.totalTickets.toString());
   const { toast } = useToast();
 
+  // Generate a consistent seed based on event data
+  const generateSeed = (eventId: string, ticketNumber: number): string => {
+    // Create a consistent hash-like seed using event ID and ticket number
+    const seedString = `${eventId}-ticket-${ticketNumber}`;
+    let hash = 0;
+    for (let i = 0; i < seedString.length; i++) {
+      const char = seedString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
+  };
+
   const generateQRCodes = async () => {
     setIsGenerating(true);
     const count = parseInt(batchSize);
@@ -36,12 +49,15 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
       const qrCodes: string[] = [];
       
       for (let i = 0; i < count; i++) {
+        // Use consistent seed for each ticket to ensure same QR codes are generated
+        const seed = generateSeed(event.id, i + 1);
+        
         const ticketData = {
           eventId: event.id,
           eventName: event.name,
           ticketNumber: i + 1,
-          timestamp: Date.now(),
-          unique: Math.random().toString(36).substring(7)
+          eventDate: event.date, // Add event date for consistency
+          seed: seed // Include seed for verification
         };
         
         const qrCodeDataURL = await QRCode.toDataURL(JSON.stringify(ticketData), {
@@ -108,7 +124,7 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
             Bulk QR Code Generation
           </CardTitle>
           <CardDescription>
-            Generate unique QR codes for your event tickets with embedded validation data.
+            Generate unique QR codes for your event tickets with embedded validation data. QR codes remain consistent for each event.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -138,7 +154,7 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
                 ) : (
                   <>
                     <QrCode className="mr-2 h-4 w-4" />
-                    Generate QR Codes
+                    {event.qrCodes.length > 0 ? 'Regenerate QR Codes' : 'Generate QR Codes'}
                   </>
                 )}
               </Button>
@@ -146,14 +162,22 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
           </div>
 
           {event.qrCodes.length > 0 && (
-            <Button
-              onClick={downloadQRCodes}
-              variant="outline"
-              className="w-full"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download All QR Codes ({event.qrCodes.length})
-            </Button>
+            <>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-sm text-green-800">
+                  ✅ QR codes for this event are consistent and will remain the same when regenerated.
+                </p>
+              </div>
+              
+              <Button
+                onClick={downloadQRCodes}
+                variant="outline"
+                className="w-full"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download All QR Codes ({event.qrCodes.length})
+              </Button>
+            </>
           )}
         </CardContent>
       </Card>
@@ -163,7 +187,7 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
           <CardHeader>
             <CardTitle>Generated QR Codes Preview</CardTitle>
             <CardDescription>
-              Preview of the first few generated QR codes
+              Preview of the first few generated QR codes (consistent per event)
             </CardDescription>
           </CardHeader>
           <CardContent>

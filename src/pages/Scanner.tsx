@@ -46,15 +46,15 @@ const Scanner = () => {
     autoCloseOnScan: true
   });
 
-  // Sync refs
+  // Properly sync refs between hook and component
   useEffect(() => {
-    if (videoRef.current && hookVideoRef.current !== videoRef.current) {
+    if (videoRef.current) {
       (hookVideoRef as any).current = videoRef.current;
     }
-    if (canvasRef.current && hookCanvasRef.current !== canvasRef.current) {
+    if (canvasRef.current) {
       (hookCanvasRef as any).current = canvasRef.current;
     }
-  }, [hookVideoRef, hookCanvasRef]);
+  }, [isScanning, hookVideoRef, hookCanvasRef]);
 
   // Refresh scan results periodically to sync with dashboard
   useEffect(() => {
@@ -147,16 +147,18 @@ const Scanner = () => {
     setIsInitializingCamera(true);
     
     try {
-      // Wait for video element to be available
+      // Ensure video element is available before proceeding
       if (!videoRef.current) {
-        console.error('Video element not ready, waiting...');
-        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log('Video element not ready, waiting...');
+        // Wait a bit more for the element to be available
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
         if (!videoRef.current) {
-          throw new Error('Video element not found after wait');
+          throw new Error('Video element is not available. Please try again.');
         }
       }
 
-      console.log('Requesting camera access...');
+      console.log('Video element found, requesting camera access...');
       
       // Try different camera constraints for better device compatibility
       let mediaStream: MediaStream | null = null;
@@ -171,6 +173,7 @@ const Scanner = () => {
             aspectRatio: { ideal: 16/9 }
           } 
         });
+        console.log('Back camera access granted');
       } catch (backCameraError) {
         console.log('Back camera not available, trying front camera...');
         // Fallback to any available camera
@@ -182,12 +185,17 @@ const Scanner = () => {
               height: { ideal: 720, min: 480 }
             } 
           });
+          console.log('Front camera access granted');
         } catch (frontCameraError) {
           console.log('Front camera not available, trying basic constraints...');
           // Final fallback - basic video request
           mediaStream = await navigator.mediaDevices.getUserMedia({ 
-            video: true 
+            video: {
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 }
+            }
           });
+          console.log('Basic camera access granted');
         }
       }
       
@@ -195,11 +203,12 @@ const Scanner = () => {
         throw new Error('Could not obtain camera stream');
       }
       
-      console.log('Camera stream obtained:', mediaStream);
+      console.log('Camera stream obtained, setting up video element...');
       
       const video = videoRef.current;
       if (!video) {
-        throw new Error('Video element not found');
+        mediaStream.getTracks().forEach(track => track.stop());
+        throw new Error('Video element became unavailable');
       }
       
       // Stop any existing stream
@@ -213,39 +222,48 @@ const Scanner = () => {
       video.playsInline = true;
       video.muted = true;
       
-      // Wait for video to be ready
+      // Wait for video to be ready with proper error handling
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error('Video load timeout'));
-        }, 10000); // 10 second timeout
+          reject(new Error('Video load timeout - camera may be in use by another application'));
+        }, 8000); // 8 second timeout
         
         const handleCanPlay = () => {
+          console.log('Video can play, starting playback...');
           clearTimeout(timeout);
           video.removeEventListener('canplay', handleCanPlay);
+          video.removeEventListener('loadedmetadata', handleCanPlay);
           video.removeEventListener('error', handleError);
           resolve();
         };
         
         const handleError = (error: any) => {
+          console.error('Video error:', error);
           clearTimeout(timeout);
           video.removeEventListener('canplay', handleCanPlay);
+          video.removeEventListener('loadedmetadata', handleCanPlay);
           video.removeEventListener('error', handleError);
-          reject(error);
+          reject(new Error('Video failed to load - please check camera permissions'));
         };
         
         video.addEventListener('canplay', handleCanPlay, { once: true });
+        video.addEventListener('loadedmetadata', handleCanPlay, { once: true });
         video.addEventListener('error', handleError, { once: true });
         
         // If video is already ready
-        if (video.readyState >= 3) {
+        if (video.readyState >= 2) {
           handleCanPlay();
         }
       });
 
       // Start video playback
-      await video.play();
-      
-      console.log('Video playing successfully, dimensions:', video.videoWidth, 'x', video.videoHeight);
+      try {
+        await video.play();
+        console.log('Video playing successfully, dimensions:', video.videoWidth, 'x', video.videoHeight);
+      } catch (playError) {
+        console.error('Play error:', playError);
+        throw new Error('Could not start video playback - camera may be restricted');
+      }
       
       setStream(mediaStream);
       setIsScanning(true);
@@ -265,19 +283,18 @@ const Scanner = () => {
       if (error instanceof DOMException) {
         switch (error.name) {
           case 'NotAllowedError':
-            errorMessage = "Camera access denied. Please allow camera permissions and try again.";
+            errorMessage = "Camera access denied. Please allow camera permissions and refresh the page.";
             break;
           case 'NotFoundError':
             errorMessage = "No camera found on this device.";
             break;
           case 'NotReadableError':
-            errorMessage = "Camera is already in use by another application.";
+            errorMessage = "Camera is already in use by another application. Please close other apps and try again.";
             break;
           case 'OverconstrainedError':
-            errorMessage = "Camera constraints not supported. Trying with basic settings...";
-            // Retry with basic constraints
-            setTimeout(() => startCamera(), 1000);
-            return;
+            errorMessage = "Camera doesn't support the requested settings. Trying again...";
+            // Don't retry automatically to avoid infinite loops
+            break;
         }
       } else if (error instanceof Error) {
         errorMessage = error.message;
@@ -405,7 +422,12 @@ const Scanner = () => {
                           autoPlay
                           playsInline
                           muted
-                          style={{ display: 'block' }}
+                          style={{ 
+                            display: 'block',
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
                         />
                         <canvas
                           ref={canvasRef}
