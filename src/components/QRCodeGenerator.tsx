@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Download, QrCode, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import QRCode from "qrcode";
+import JSZip from "jszip";
 
 interface Event {
   id: string;
@@ -89,7 +90,7 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
     }
   };
 
-  const downloadQRCodes = () => {
+  const downloadQRCodes = async () => {
     if (event.qrCodes.length === 0) {
       toast({
         title: "No QR Codes",
@@ -99,20 +100,43 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
       return;
     }
 
-    // Create a zip-like download experience
-    event.qrCodes.forEach((qrCode, index) => {
+    try {
+      const zip = new JSZip();
+      
+      // Add each QR code to the zip
+      for (let i = 0; i < event.qrCodes.length; i++) {
+        const qrCode = event.qrCodes[i];
+        // Convert data URL to blob
+        const response = await fetch(qrCode);
+        const blob = await response.blob();
+        zip.file(`${event.name}-ticket-${i + 1}.png`, blob);
+      }
+
+      // Generate zip file
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      
+      // Download zip file
       const link = document.createElement('a');
-      link.download = `${event.name}-ticket-${index + 1}.png`;
-      link.href = qrCode;
+      link.download = `${event.name}-qr-codes.zip`;
+      link.href = URL.createObjectURL(zipBlob);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    });
+      
+      // Clean up object URL
+      URL.revokeObjectURL(link.href);
 
-    toast({
-      title: "Download Started",
-      description: `Downloading ${event.qrCodes.length} QR codes.`
-    });
+      toast({
+        title: "Download Started",
+        description: `Downloading ${event.qrCodes.length} QR codes as a zip file.`
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "Failed to create zip file. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

@@ -57,7 +57,10 @@ const Scanner = () => {
 
   const processQRCode = async (qrData: string) => {
     try {
+      console.log('Processing QR Data:', qrData);
       const ticketData = JSON.parse(qrData);
+      console.log('Parsed ticket data:', ticketData);
+      console.log('Ticket number from QR:', ticketData.ticketNumber);
       
       // Check if this ticket was already scanned
       const existingScan = scanResults.find(
@@ -74,6 +77,7 @@ const Scanner = () => {
           : 'Valid ticket - Access granted'
       };
 
+      console.log('Scan result data being saved:', scanResultData);
       await addScanResult(scanResultData);
 
       toast({
@@ -83,6 +87,7 @@ const Scanner = () => {
       });
 
     } catch (error) {
+      console.error('Error processing QR code:', error);
       const scanResultData = {
         eventName: 'Invalid',
         ticketNumber: 0,

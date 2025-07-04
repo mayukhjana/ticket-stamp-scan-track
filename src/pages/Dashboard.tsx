@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,22 +50,22 @@ const Dashboard = () => {
   const { toast } = useToast();
 
   // Update selectedEvent when events load and sync scan data
-  useState(() => {
+  useEffect(() => {
     if (!selectedEvent && events.length > 0) {
       setSelectedEvent(events[0]);
     }
     // Refresh scan results to sync with scanner
     loadScanResults();
-  });
+  }, [events, selectedEvent, loadScanResults]);
 
   // Refresh data periodically to stay synced
-  useState(() => {
+  useEffect(() => {
     const interval = setInterval(() => {
       loadScanResults();
     }, 5000);
 
     return () => clearInterval(interval);
-  });
+  }, [loadScanResults]);
 
   const handleSignOut = async () => {
     try {
