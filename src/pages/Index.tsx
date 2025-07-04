@@ -182,6 +182,15 @@ const Index = () => {
           )}
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-50 border-t py-8">
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-gray-600">
+            Made with <span className="text-red-500">❤️</span> by ConceptLabs Academy
+          </p>
+        </div>
+      </footer>
     </div>
   );
 };
