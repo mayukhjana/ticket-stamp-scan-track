@@ -34,7 +34,7 @@ const Scanner = () => {
     await processQRCode(qrData);
   }, [scanResults]);
 
-  const { videoRef, canvasRef } = useQRScanner({
+  const { videoRef, canvasRef, startScanning, stopScanning } = useQRScanner({
     onQRCodeDetected: handleQRCodeDetected,
     isScanning
   });
@@ -204,6 +204,7 @@ const Scanner = () => {
         videoRef.current.playsInline = true;
         videoRef.current.muted = true;
         videoRef.current.autoplay = true;
+        videoRef.current.style.display = 'block'; // Ensure video is visible
         try {
           await videoRef.current.play();
           console.log("Camera stream attached and playing (from useEffect).");

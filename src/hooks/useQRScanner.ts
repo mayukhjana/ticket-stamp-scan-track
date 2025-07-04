@@ -3,20 +3,19 @@ import { useRef, useCallback, useEffect, useState } from 'react';
 import jsQR from 'jsqr';
 
 interface UseQRScannerProps {
-  videoRef: React.RefObject<HTMLVideoElement>;
-  canvasRef: React.RefObject<HTMLCanvasElement>;
   onQRCodeDetected: (data: string) => void;
-  isActive: boolean;
+  isScanning: boolean;
 }
 
-export const useQRScanner = ({ videoRef, canvasRef, onQRCodeDetected, isActive }: UseQRScannerProps) => {
+export const useQRScanner = ({ onQRCodeDetected, isScanning }: UseQRScannerProps) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const [lastDetectedCode, setLastDetectedCode] = useState<string>('');
   const [lastDetectionTime, setLastDetectionTime] = useState<number>(0);
-  const [isScanning, setIsScanning] = useState(false);
 
   const scanQRCode = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || !isActive || !isScanning) {
+    if (!videoRef.current || !canvasRef.current || !isScanning) {
       return;
     }
 
@@ -25,7 +24,7 @@ export const useQRScanner = ({ videoRef, canvasRef, onQRCodeDetected, isActive }
     const context = canvas.getContext('2d');
 
     if (!context || video.readyState !== video.HAVE_ENOUGH_DATA) {
-      if (isActive && isScanning) {
+      if (isScanning) {
         animationRef.current = requestAnimationFrame(scanQRCode);
       }
       return;
@@ -34,7 +33,7 @@ export const useQRScanner = ({ videoRef, canvasRef, onQRCodeDetected, isActive }
     // Set canvas dimensions to match video
     const { videoWidth, videoHeight } = video;
     if (videoWidth === 0 || videoHeight === 0) {
-      if (isActive && isScanning) {
+      if (isScanning) {
         animationRef.current = requestAnimationFrame(scanQRCode);
       }
       return;
@@ -67,14 +66,13 @@ export const useQRScanner = ({ videoRef, canvasRef, onQRCodeDetected, isActive }
     }
 
     // Continue scanning
-    if (isActive && isScanning) {
+    if (isScanning) {
       animationRef.current = requestAnimationFrame(scanQRCode);
     }
-  }, [videoRef, canvasRef, onQRCodeDetected, isActive, isScanning, lastDetectedCode, lastDetectionTime]);
+  }, [videoRef, canvasRef, onQRCodeDetected, isScanning, lastDetectedCode, lastDetectionTime]);
 
   const startScanning = useCallback(() => {
     console.log('Starting QR scan loop');
-    setIsScanning(true);
     // Small delay to ensure video is ready
     setTimeout(() => {
       scanQRCode();
@@ -83,7 +81,6 @@ export const useQRScanner = ({ videoRef, canvasRef, onQRCodeDetected, isActive }
 
   const stopScanning = useCallback(() => {
     console.log('Stopping QR scan loop');
-    setIsScanning(false);
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
     }
@@ -98,5 +95,14 @@ export const useQRScanner = ({ videoRef, canvasRef, onQRCodeDetected, isActive }
     };
   }, []);
 
-  return { startScanning, stopScanning };
+  // Auto-start scanning when isScanning becomes true
+  useEffect(() => {
+    if (isScanning) {
+      startScanning();
+    } else {
+      stopScanning();
+    }
+  }, [isScanning, startScanning, stopScanning]);
+
+  return { videoRef, canvasRef, startScanning, stopScanning };
 };
