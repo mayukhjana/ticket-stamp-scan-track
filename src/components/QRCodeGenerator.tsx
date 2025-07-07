@@ -103,47 +103,28 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
     try {
       const zip = new JSZip();
       
-      console.log('Starting zip creation with', event.qrCodes.length, 'QR codes');
-      
       // Add each QR code to the zip
       for (let i = 0; i < event.qrCodes.length; i++) {
         const qrCode = event.qrCodes[i];
-        try {
-          // Convert data URL to blob
-          const response = await fetch(qrCode);
-          const blob = await response.blob();
-          zip.file(`ticket-${i + 1}.png`, blob);
-          console.log(`Added ticket-${i + 1}.png to zip`);
-        } catch (fileError) {
-          console.error(`Error processing QR code ${i + 1}:`, fileError);
-        }
+        // Convert data URL to blob
+        const response = await fetch(qrCode);
+        const blob = await response.blob();
+        zip.file(`${event.name}-ticket-${i + 1}.png`, blob);
       }
 
-      console.log('Generating zip file...');
       // Generate zip file
-      const zipBlob = await zip.generateAsync({ 
-        type: "blob",
-        compression: "DEFLATE",
-        compressionOptions: {
-          level: 6
-        }
-      });
-      
-      console.log('Zip generated, size:', zipBlob.size);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
       
       // Download zip file
       const link = document.createElement('a');
-      link.download = `${event.name}.zip`;
+      link.download = `${event.name}-qr-codes.zip`;
       link.href = URL.createObjectURL(zipBlob);
-      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-      }, 100);
+      // Clean up object URL
+      URL.revokeObjectURL(link.href);
 
       toast({
         title: "Download Started",
