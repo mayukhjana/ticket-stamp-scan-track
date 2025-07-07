@@ -117,7 +117,7 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
       
       // Download zip file
       const link = document.createElement('a');
-      link.download = `${event.name}-qr-codes.zip`;
+      link.download = `${event.name}.zip`;
       link.href = URL.createObjectURL(zipBlob);
       document.body.appendChild(link);
       link.click();
