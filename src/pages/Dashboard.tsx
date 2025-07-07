@@ -8,11 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket, LogOut, Loader2, ChevronDown } from "lucide-react";
+import { Plus, Calendar, Users, QrCode, Download, Upload, Ticket, LogOut, Loader2, ChevronDown, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEventStorage } from "@/hooks/useEventStorage";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useScanResults } from "@/hooks/useScanResults";
 import QRCodeGenerator from "@/components/QRCodeGenerator";
 import TicketMockup from "@/components/TicketMockup";
@@ -34,7 +35,7 @@ interface Event {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
-  const { events, addEvent, updateEvent, isLoading } = useEventStorage();
+  const { events, addEvent, updateEvent, deleteEvent, isLoading } = useEventStorage();
   const { scanResults, loadScanResults } = useScanResults();
   
   const [newEvent, setNewEvent] = useState({
@@ -138,6 +139,28 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteEvent = async (eventId: string) => {
+    try {
+      await deleteEvent(eventId);
+      
+      // Clear selected event if it was deleted
+      if (selectedEvent?.id === eventId) {
+        setSelectedEvent(events.length > 1 ? events.find(e => e.id !== eventId) || null : null);
+      }
+      
+      toast({
+        title: "Event Deleted",
+        description: "The event has been permanently deleted."
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete event. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -199,30 +222,65 @@ const Dashboard = () => {
                 {events.map((event) => (
                   <div
                     key={event.id}
-                    className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+                    className={`relative p-4 rounded-lg border transition-colors ${
                       selectedEvent?.id === event.id 
                         ? 'border-purple-500 bg-purple-50' 
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
-                    onClick={() => setSelectedEvent(event)}
                   >
-                    <h3 className="font-semibold text-gray-900">{event.name}</h3>
-                    <p className="text-sm text-gray-600 mt-1">{event.date}</p>
-                    <div className="flex justify-between items-center mt-3">
-                      <Badge variant="outline">
-                        {event.scannedTickets}/{event.totalTickets} scanned
-                      </Badge>
-                      <div className="flex gap-1">
-                        <Badge variant={event.qrCodes.length > 0 ? "default" : "secondary"}>
-                          {event.qrCodes.length > 0 ? "QR Ready" : "Setup Needed"}
+                    <div 
+                      className="cursor-pointer"
+                      onClick={() => setSelectedEvent(event)}
+                    >
+                      <h3 className="font-semibold text-gray-900">{event.name}</h3>
+                      <p className="text-sm text-gray-600 mt-1">{event.date}</p>
+                      <div className="flex justify-between items-center mt-3">
+                        <Badge variant="outline">
+                          {event.scannedTickets}/{event.totalTickets} scanned
                         </Badge>
-                        {event.templateImage && (
-                          <Badge variant="outline" className="text-xs">
-                            Template ✓
+                        <div className="flex gap-1">
+                          <Badge variant={event.qrCodes.length > 0 ? "default" : "secondary"}>
+                            {event.qrCodes.length > 0 ? "QR Ready" : "Setup Needed"}
                           </Badge>
-                        )}
+                          {event.templateImage && (
+                            <Badge variant="outline" className="text-xs">
+                              Template ✓
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    
+                    {/* Delete Button */}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="absolute top-2 right-2 h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{event.name}"? This action cannot be undone and will permanently remove all event data including QR codes and scan results.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteEvent(event.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Delete Event
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 ))}
 

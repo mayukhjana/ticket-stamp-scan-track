@@ -156,10 +156,30 @@ export const useEventStorage = () => {
     }
   };
 
+  const deleteEvent = async (eventId: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setEvents(prev => prev.filter(event => event.id !== eventId));
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      throw error;
+    }
+  };
+
   return {
     events,
     addEvent,
     updateEvent,
+    deleteEvent,
     setEvents,
     isLoading,
     loadEvents

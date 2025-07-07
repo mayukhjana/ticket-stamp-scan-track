@@ -125,8 +125,8 @@ const Scanner = () => {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
         video: {
           facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 }
         }
       });
       console.log("Camera stream obtained:", mediaStream);
@@ -304,27 +304,27 @@ const Scanner = () => {
                           ref={canvasRef}
                           className="hidden"
                         />
-                        {/* Improved Overlay */}
+                        {/* Mobile-optimized Overlay */}
                         <div className="absolute inset-0 pointer-events-none">
                           <div className="absolute inset-0 bg-black bg-opacity-50" />
                           <div
                             className="absolute left-1/2 top-1/2"
                             style={{
-                              width: 'min(256px, 80vw)',
-                              height: 'min(256px, 80vw)',
+                              width: 'min(200px, 70vw)',
+                              height: 'min(200px, 70vw)',
                               transform: 'translate(-50%, -50%)',
                               boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
-                              border: '4px solid #a855f7',
-                              borderRadius: '16px',
+                              border: '3px solid #a855f7',
+                              borderRadius: '12px',
                               background: 'transparent',
-                              maxWidth: 'calc(100vw - 32px)',
-                              maxHeight: 'calc(100vh - 200px)',
+                              maxWidth: 'calc(100vw - 40px)',
+                              maxHeight: 'calc(100vh - 300px)',
                             }}
                           >
-                            <div className="absolute top-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-l-4 border-purple-500 rounded-tl-lg" />
-                            <div className="absolute top-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-r-4 border-purple-500 rounded-tr-lg" />
-                            <div className="absolute bottom-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-l-4 border-purple-500 rounded-bl-lg" />
-                            <div className="absolute bottom-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-r-4 border-purple-500 rounded-br-lg" />
+                            <div className="absolute top-0 left-0 w-4 h-4 sm:w-6 sm:h-6 border-t-3 border-l-3 border-purple-500 rounded-tl-lg" />
+                            <div className="absolute top-0 right-0 w-4 h-4 sm:w-6 sm:h-6 border-t-3 border-r-3 border-purple-500 rounded-tr-lg" />
+                            <div className="absolute bottom-0 left-0 w-4 h-4 sm:w-6 sm:h-6 border-b-3 border-l-3 border-purple-500 rounded-bl-lg" />
+                            <div className="absolute bottom-0 right-0 w-4 h-4 sm:w-6 sm:h-6 border-b-3 border-r-3 border-purple-500 rounded-br-lg" />
                           </div>
                         </div>
                       </>
