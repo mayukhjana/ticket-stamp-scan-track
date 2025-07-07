@@ -160,6 +160,19 @@ export const useEventStorage = () => {
     if (!user) return;
 
     try {
+      // First delete related scan results
+      const { error: scanError } = await supabase
+        .from('scan_results')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('user_id', user.id);
+
+      if (scanError) {
+        console.warn('Error deleting scan results:', scanError);
+        // Continue with event deletion even if scan results deletion fails
+      }
+
+      // Then delete the event
       const { error } = await supabase
         .from('events')
         .delete()

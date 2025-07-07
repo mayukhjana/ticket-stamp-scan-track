@@ -86,6 +86,11 @@ const Scanner = () => {
         variant: scanResultData.status === 'valid' ? "default" : "destructive"
       });
 
+      // Stop camera after successful scan to prevent rescanning
+      if (scanResultData.status === 'valid' || scanResultData.status === 'duplicate') {
+        stopCamera();
+      }
+
     } catch (error) {
       console.error('Error processing QR code:', error);
       const scanResultData = {
@@ -102,6 +107,9 @@ const Scanner = () => {
         description: "This QR code is not a valid ticket or event.",
         variant: "destructive"
       });
+
+      // Stop camera after invalid scan as well
+      stopCamera();
     }
   };
 
