@@ -146,13 +146,15 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
             // Calculate QR code position and size
             const qrWidth = (qrSize / 100) * canvas.width;
             const qrHeight = qrWidth; // Keep it square
-            const qrX = (qrPosition.x / 100) * (canvas.width - qrWidth);
-            const qrY = (qrPosition.y / 100) * (canvas.height - qrHeight);
+            const qrX = (qrPosition.x / 100) * canvas.width - (qrWidth / 2);
+            const qrY = (qrPosition.y / 100) * canvas.height - (qrHeight / 2);
             
-            // Draw QR code with bounds checking
-            if (qrX >= 0 && qrY >= 0 && qrX + qrWidth <= canvas.width && qrY + qrHeight <= canvas.height) {
-              ctx.drawImage(qrImg, qrX, qrY, qrWidth, qrHeight);
-            }
+            // Ensure QR code stays within canvas bounds
+            const finalX = Math.max(0, Math.min(qrX, canvas.width - qrWidth));
+            const finalY = Math.max(0, Math.min(qrY, canvas.height - qrHeight));
+            
+            // Draw QR code
+            ctx.drawImage(qrImg, finalX, finalY, qrWidth, qrHeight);
             
             toast({
               title: "Mockup Generated",
@@ -265,11 +267,15 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
         // Calculate QR code position and size
         const qrWidth = (qrSize / 100) * canvas.width;
         const qrHeight = qrWidth; // Keep it square
-        const qrX = (qrPosition.x / 100) * (canvas.width - qrWidth);
-        const qrY = (qrPosition.y / 100) * (canvas.height - qrHeight);
+        const qrX = (qrPosition.x / 100) * canvas.width - (qrWidth / 2);
+        const qrY = (qrPosition.y / 100) * canvas.height - (qrHeight / 2);
+        
+        // Ensure QR code stays within canvas bounds
+        const finalX = Math.max(0, Math.min(qrX, canvas.width - qrWidth));
+        const finalY = Math.max(0, Math.min(qrY, canvas.height - qrHeight));
         
         // Draw QR code
-        ctx.drawImage(qrImg, qrX, qrY, qrWidth, qrHeight);
+        ctx.drawImage(qrImg, finalX, finalY, qrWidth, qrHeight);
         
         // Convert canvas to blob and add to zip
         const dataURL = canvas.toDataURL('image/png');
