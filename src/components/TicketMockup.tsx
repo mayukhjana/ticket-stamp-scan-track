@@ -164,7 +164,7 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
     });
   };
 
-  const generateAllMockups = () => {
+  const generateAllMockups = async () => {
     if (!uploadedTemplate || event.qrCodes.length === 0) {
       toast({
         title: "Missing Requirements",
@@ -174,26 +174,79 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
       return;
     }
 
-    // Generate mockups for all QR codes
-    event.qrCodes.forEach((qrCode, index) => {
-      setTimeout(() => {
-        generateMockup(index);
-        setTimeout(() => {
-          const canvas = canvasRef.current;
-          if (canvas) {
-            const link = document.createElement('a');
-            link.download = `${event.name}-ticket-${index + 1}.png`;
-            link.href = canvas.toDataURL();
-            link.click();
-          }
-        }, 100);
-      }, index * 200);
-    });
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    toast({
-      title: "Bulk Generation Started",
-      description: `Generating ${event.qrCodes.length} ticket mockups...`
-    });
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    try {
+      const templateImg = new Image();
+      
+      // Wait for template to load
+      await new Promise((resolve, reject) => {
+        templateImg.onload = resolve;
+        templateImg.onerror = reject;
+        templateImg.src = uploadedTemplate;
+      });
+
+      canvas.width = templateImg.width;
+      canvas.height = templateImg.height;
+
+      // Generate each mockup
+      for (let index = 0; index < event.qrCodes.length; index++) {
+        const qrCode = event.qrCodes[index];
+        
+        // Clear canvas and draw template
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(templateImg, 0, 0);
+        
+        // Load and draw QR code
+        const qrImg = new Image();
+        await new Promise((resolve, reject) => {
+          qrImg.onload = resolve;
+          qrImg.onerror = reject;
+          qrImg.src = qrCode;
+        });
+        
+        // Calculate QR code position and size
+        const qrWidth = (qrSize / 100) * canvas.width;
+        const qrHeight = qrWidth; // Keep it square
+        const qrX = (qrPosition.x / 100) * (canvas.width - qrWidth);
+        const qrY = (qrPosition.y / 100) * (canvas.height - qrHeight);
+        
+        // Draw QR code
+        ctx.drawImage(qrImg, qrX, qrY, qrWidth, qrHeight);
+        
+        // Download this mockup
+        const link = document.createElement('a');
+        link.download = `${event.name}-ticket-${index + 1}.png`;
+        link.href = canvas.toDataURL();
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(link);
+        }, 100);
+        
+        // Small delay between downloads
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      toast({
+        title: "All Mockups Generated",
+        description: `Successfully generated ${event.qrCodes.length} ticket mockups.`
+      });
+    } catch (error) {
+      console.error('Error generating mockups:', error);
+      toast({
+        title: "Generation Failed",
+        description: "Failed to generate all mockups. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
