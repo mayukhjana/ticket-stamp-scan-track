@@ -181,6 +181,10 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
     if (!ctx) return;
 
     try {
+      // Import JSZip dynamically
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      
       const templateImg = new Image();
       
       // Wait for template to load
@@ -193,7 +197,7 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
       canvas.width = templateImg.width;
       canvas.height = templateImg.height;
 
-      // Generate each mockup
+      // Generate each mockup and add to zip
       for (let index = 0; index < event.qrCodes.length; index++) {
         const qrCode = event.qrCodes[index];
         
@@ -218,32 +222,46 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
         // Draw QR code
         ctx.drawImage(qrImg, qrX, qrY, qrWidth, qrHeight);
         
-        // Download this mockup
-        const link = document.createElement('a');
-        link.download = `${event.name}-ticket-${index + 1}.png`;
-        link.href = canvas.toDataURL();
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
+        // Convert canvas to blob and add to zip
+        const dataURL = canvas.toDataURL('image/png');
+        const response = await fetch(dataURL);
+        const blob = await response.blob();
         
-        // Clean up
-        setTimeout(() => {
-          document.body.removeChild(link);
-        }, 100);
-        
-        // Small delay between downloads
-        await new Promise(resolve => setTimeout(resolve, 200));
+        zip.file(`ticket-${index + 1}.png`, blob);
       }
 
+      // Generate and download zip file
+      const zipBlob = await zip.generateAsync({ 
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: {
+          level: 6
+        }
+      });
+      
+      // Download zip file
+      const link = document.createElement('a');
+      link.download = `${event.name}-tickets.zip`;
+      link.href = URL.createObjectURL(zipBlob);
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+      }, 100);
+
       toast({
-        title: "All Mockups Generated",
-        description: `Successfully generated ${event.qrCodes.length} ticket mockups.`
+        title: "All Tickets Generated",
+        description: `Successfully generated ${event.qrCodes.length} tickets with QR codes in a zip file.`
       });
     } catch (error) {
-      console.error('Error generating mockups:', error);
+      console.error('Error generating tickets:', error);
       toast({
         title: "Generation Failed",
-        description: "Failed to generate all mockups. Please try again.",
+        description: "Failed to generate tickets. Please try again.",
         variant: "destructive"
       });
     }
