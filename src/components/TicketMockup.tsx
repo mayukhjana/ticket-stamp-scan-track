@@ -117,33 +117,82 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Clear any existing content
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     const templateImg = new Image();
     const qrImg = new Image();
 
     templateImg.onload = () => {
-      canvas.width = templateImg.width;
-      canvas.height = templateImg.height;
-      
-      // Draw template
-      ctx.drawImage(templateImg, 0, 0);
-      
-      qrImg.onload = () => {
-        // Calculate QR code position and size
-        const qrWidth = (qrSize / 100) * canvas.width;
-        const qrHeight = qrWidth; // Keep it square
-        const qrX = (qrPosition.x / 100) * (canvas.width - qrWidth);
-        const qrY = (qrPosition.y / 100) * (canvas.height - qrHeight);
+      try {
+        // Limit canvas size to prevent memory issues
+        const maxSize = 2000;
+        let { width, height } = templateImg;
         
-        // Draw QR code
-        ctx.drawImage(qrImg, qrX, qrY, qrWidth, qrHeight);
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width *= ratio;
+          height *= ratio;
+        }
         
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw template with error handling
+        ctx.drawImage(templateImg, 0, 0, width, height);
+        
+        qrImg.onload = () => {
+          try {
+            // Calculate QR code position and size
+            const qrWidth = (qrSize / 100) * canvas.width;
+            const qrHeight = qrWidth; // Keep it square
+            const qrX = (qrPosition.x / 100) * (canvas.width - qrWidth);
+            const qrY = (qrPosition.y / 100) * (canvas.height - qrHeight);
+            
+            // Draw QR code with bounds checking
+            if (qrX >= 0 && qrY >= 0 && qrX + qrWidth <= canvas.width && qrY + qrHeight <= canvas.height) {
+              ctx.drawImage(qrImg, qrX, qrY, qrWidth, qrHeight);
+            }
+            
+            toast({
+              title: "Mockup Generated",
+              description: "Your ticket mockup has been generated successfully."
+            });
+          } catch (error) {
+            console.error('Error drawing QR code:', error);
+            toast({
+              title: "Error",
+              description: "Failed to draw QR code on template.",
+              variant: "destructive"
+            });
+          }
+        };
+        
+        qrImg.onerror = () => {
+          toast({
+            title: "QR Code Error",
+            description: "Failed to load QR code image.",
+            variant: "destructive"
+          });
+        };
+        
+        qrImg.src = event.qrCodes[qrCodeIndex];
+      } catch (error) {
+        console.error('Error drawing template:', error);
         toast({
-          title: "Mockup Generated",
-          description: "Your ticket mockup has been generated successfully."
+          title: "Template Error",
+          description: "Failed to draw template on canvas.",
+          variant: "destructive"
         });
-      };
-      
-      qrImg.src = event.qrCodes[qrCodeIndex];
+      }
+    };
+    
+    templateImg.onerror = () => {
+      toast({
+        title: "Template Error",
+        description: "Failed to load template image.",
+        variant: "destructive"
+      });
     };
     
     templateImg.src = uploadedTemplate;
