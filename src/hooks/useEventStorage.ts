@@ -31,8 +31,8 @@ export const useEventStorage = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load events from Supabase
-  const loadEvents = async () => {
+  // Load events from Supabase with retry logic
+  const loadEvents = async (retryCount = 0) => {
     if (!user) {
       setEvents([]);
       setIsLoading(false);
@@ -40,15 +40,32 @@ export const useEventStorage = () => {
     }
 
     try {
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .abortSignal(controller.signal);
 
-      if (error) throw error;
+      clearTimeout(timeoutId);
 
-      const formattedEvents = data.map(event => ({
+      if (error) {
+        // Handle specific timeout errors
+        if (error.code === '57014' || error.message?.includes('timeout')) {
+          if (retryCount < 2) {
+            console.log(`Database timeout, retrying... (attempt ${retryCount + 1})`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+            return loadEvents(retryCount + 1);
+          }
+        }
+        throw error;
+      }
+
+      const formattedEvents = data?.map(event => ({
         id: event.id,
         name: event.name,
         date: event.date,
@@ -60,11 +77,17 @@ export const useEventStorage = () => {
         qrPositionX: event.qr_position_x || 50,
         qrPositionY: event.qr_position_y || 50,
         qrSize: event.qr_size || 80
-      }));
+      })) || [];
 
       setEvents(formattedEvents);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading events:', error);
+      
+      // Handle abort signal
+      if (error.name === 'AbortError') {
+        console.log('Request was aborted due to timeout');
+      }
+      
       // Fallback to empty array if error
       setEvents([]);
     } finally {

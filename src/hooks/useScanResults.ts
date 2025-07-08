@@ -17,8 +17,8 @@ export const useScanResults = () => {
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load scan results from Supabase
-  const loadScanResults = useCallback(async () => {
+  // Load scan results from Supabase with retry logic
+  const loadScanResults = useCallback(async (retryCount = 0) => {
     if (!user) {
       setScanResults([]);
       setIsLoading(false);
@@ -26,27 +26,50 @@ export const useScanResults = () => {
     }
 
     try {
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
       const { data, error } = await supabase
         .from('scan_results')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50); // Limit to recent 50 scans
+        .limit(50) // Limit to recent 50 scans
+        .abortSignal(controller.signal);
 
-      if (error) throw error;
+      clearTimeout(timeoutId);
 
-      const formattedResults = data.map(result => ({
+      if (error) {
+        // Handle specific timeout or network errors
+        if (error.code === '57014' || error.message?.includes('timeout') || error.message?.includes('Failed to fetch')) {
+          if (retryCount < 2) {
+            console.log(`Database/network error, retrying scan results... (attempt ${retryCount + 1})`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+            return loadScanResults(retryCount + 1);
+          }
+        }
+        throw error;
+      }
+
+      const formattedResults = data?.map(result => ({
         id: result.id,
         eventName: result.event_name,
         ticketNumber: result.ticket_number,
         scanTime: new Date(result.scan_time).toLocaleString(),
         status: result.status as 'valid' | 'invalid' | 'duplicate',
         message: result.message
-      }));
+      })) || [];
 
       setScanResults(formattedResults);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading scan results:', error);
+      
+      // Handle abort signal
+      if (error.name === 'AbortError') {
+        console.log('Scan results request was aborted due to timeout');
+      }
+      
       setScanResults([]);
     } finally {
       setIsLoading(false);
