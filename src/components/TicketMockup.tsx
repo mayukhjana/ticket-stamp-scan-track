@@ -231,58 +231,97 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Store original canvas state
+    const originalWidth = canvas.width;
+    const originalHeight = canvas.height;
+    const originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
     try {
+      toast({
+        title: "Generating Tickets",
+        description: "Please wait while we generate all your tickets..."
+      });
+
       // Import JSZip dynamically
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
       
       const templateImg = new Image();
       
-      // Wait for template to load
+      // Wait for template to load with timeout
       await new Promise((resolve, reject) => {
-        templateImg.onload = resolve;
-        templateImg.onerror = reject;
+        const timeout = setTimeout(() => reject(new Error('Template load timeout')), 10000);
+        templateImg.onload = () => {
+          clearTimeout(timeout);
+          resolve(null);
+        };
+        templateImg.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error('Failed to load template'));
+        };
         templateImg.src = uploadedTemplate;
       });
 
-      canvas.width = templateImg.width;
-      canvas.height = templateImg.height;
+      // Limit canvas size to prevent memory issues
+      const maxSize = 2000;
+      let { width, height } = templateImg;
+      
+      if (width > maxSize || height > maxSize) {
+        const ratio = Math.min(maxSize / width, maxSize / height);
+        width *= ratio;
+        height *= ratio;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
 
       // Generate each mockup and add to zip
       for (let index = 0; index < event.qrCodes.length; index++) {
         const qrCode = event.qrCodes[index];
         
-        // Clear canvas and draw template
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(templateImg, 0, 0);
-        
-        // Load and draw QR code
-        const qrImg = new Image();
-        await new Promise((resolve, reject) => {
-          qrImg.onload = resolve;
-          qrImg.onerror = reject;
-          qrImg.src = qrCode;
-        });
-        
-        // Calculate QR code position and size
-        const qrWidth = (qrSize / 100) * canvas.width;
-        const qrHeight = qrWidth; // Keep it square
-        const qrX = (qrPosition.x / 100) * canvas.width - (qrWidth / 2);
-        const qrY = (qrPosition.y / 100) * canvas.height - (qrHeight / 2);
-        
-        // Ensure QR code stays within canvas bounds
-        const finalX = Math.max(0, Math.min(qrX, canvas.width - qrWidth));
-        const finalY = Math.max(0, Math.min(qrY, canvas.height - qrHeight));
-        
-        // Draw QR code
-        ctx.drawImage(qrImg, finalX, finalY, qrWidth, qrHeight);
-        
-        // Convert canvas to blob and add to zip
-        const dataURL = canvas.toDataURL('image/png');
-        const response = await fetch(dataURL);
-        const blob = await response.blob();
-        
-        zip.file(`ticket-${index + 1}.png`, blob);
+        try {
+          // Clear canvas and draw template
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+          
+          // Load and draw QR code with timeout
+          const qrImg = new Image();
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error(`QR code ${index + 1} load timeout`)), 10000);
+            qrImg.onload = () => {
+              clearTimeout(timeout);
+              resolve(null);
+            };
+            qrImg.onerror = () => {
+              clearTimeout(timeout);
+              reject(new Error(`Failed to load QR code ${index + 1}`));
+            };
+            qrImg.src = qrCode;
+          });
+          
+          // Calculate QR code position and size
+          const qrWidth = (qrSize / 100) * canvas.width;
+          const qrHeight = qrWidth; // Keep it square
+          const qrX = (qrPosition.x / 100) * canvas.width - (qrWidth / 2);
+          const qrY = (qrPosition.y / 100) * canvas.height - (qrHeight / 2);
+          
+          // Ensure QR code stays within canvas bounds
+          const finalX = Math.max(0, Math.min(qrX, canvas.width - qrWidth));
+          const finalY = Math.max(0, Math.min(qrY, canvas.height - qrHeight));
+          
+          // Draw QR code
+          ctx.drawImage(qrImg, finalX, finalY, qrWidth, qrHeight);
+          
+          // Convert canvas to blob and add to zip
+          const dataURL = canvas.toDataURL('image/png', 0.9); // Added quality parameter
+          const response = await fetch(dataURL);
+          const blob = await response.blob();
+          
+          zip.file(`ticket-${String(index + 1).padStart(3, '0')}.png`, blob);
+        } catch (error) {
+          console.error(`Error generating ticket ${index + 1}:`, error);
+          // Continue with other tickets even if one fails
+        }
       }
 
       // Generate and download zip file
@@ -296,7 +335,7 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
       
       // Download zip file
       const link = document.createElement('a');
-      link.download = `${event.name}-tickets.zip`;
+      link.download = `${event.name.replace(/[^a-z0-9]/gi, '_')}-tickets.zip`;
       link.href = URL.createObjectURL(zipBlob);
       link.style.display = 'none';
       document.body.appendChild(link);
@@ -304,8 +343,12 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
       
       // Clean up
       setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
+        try {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+        } catch (cleanupError) {
+          console.warn('Cleanup error:', cleanupError);
+        }
       }, 100);
 
       toast({
@@ -319,6 +362,19 @@ const TicketMockup = ({ event, onTemplateUpdate }: TicketMockupProps) => {
         description: "Failed to generate tickets. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      // Always restore original canvas state
+      try {
+        canvas.width = originalWidth;
+        canvas.height = originalHeight;
+        ctx.putImageData(originalImageData, 0, 0);
+      } catch (restoreError) {
+        console.warn('Canvas restore error:', restoreError);
+        // If restore fails, just clear the canvas
+        canvas.width = originalWidth;
+        canvas.height = originalHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
     }
   };
 
