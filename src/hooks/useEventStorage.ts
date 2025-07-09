@@ -31,7 +31,7 @@ export const useEventStorage = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load events from Supabase with enhanced retry logic
+  // Load events from Supabase with enhanced retry logic and persistence
   const loadEvents = async (retryCount = 0) => {
     if (!user) {
       setEvents([]);
@@ -42,14 +42,14 @@ export const useEventStorage = () => {
     try {
       // Create AbortController with longer timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased to 45 seconds
 
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50) // Limit results for better performance
+        .limit(20) // Reduced limit for better performance
         .abortSignal(controller.signal);
 
       clearTimeout(timeoutId);
@@ -64,11 +64,16 @@ export const useEventStorage = () => {
           error.message?.includes('AbortError') ||
           error.code === '20' // AbortError code
         ) {
-          if (retryCount < 3) { // Increased retry count
+          if (retryCount < 2) { // Reduced retry count to prevent infinite loops
             console.log(`Database error, retrying... (attempt ${retryCount + 1})`);
-            const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff
+            const backoffDelay = Math.min(2000 * Math.pow(2, retryCount), 8000); // Longer backoff
             await new Promise(resolve => setTimeout(resolve, backoffDelay));
             return loadEvents(retryCount + 1);
+          } else {
+            // Don't clear events on final retry failure - preserve existing state
+            console.warn('Max retries reached, preserving existing events');
+            setIsLoading(false);
+            return;
           }
         }
         throw error;
@@ -97,8 +102,12 @@ export const useEventStorage = () => {
         console.log('Request was aborted due to timeout');
       }
       
-      // Fallback to empty array if error
-      setEvents([]);
+      // CRITICAL FIX: Don't clear events on error - preserve existing state
+      console.warn('Database error occurred, preserving existing events to prevent disappearing');
+      // Only clear events if we have no existing events
+      if (events.length === 0) {
+        setEvents([]);
+      }
     } finally {
       setIsLoading(false);
     }
