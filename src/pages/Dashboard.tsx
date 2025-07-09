@@ -59,11 +59,11 @@ const Dashboard = () => {
     loadScanResults();
   }, [events, selectedEvent, loadScanResults]);
 
-  // Refresh data periodically to stay synced
+  // Refresh data periodically to stay synced (reduced frequency)
   useEffect(() => {
     const interval = setInterval(() => {
       loadScanResults();
-    }, 5000);
+    }, 15000); // Reduced from 5s to 15s to reduce database load
 
     return () => clearInterval(interval);
   }, [loadScanResults]);

@@ -17,7 +17,7 @@ export const useScanResults = () => {
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load scan results from Supabase with retry logic
+  // Load scan results from Supabase with enhanced retry logic
   const loadScanResults = useCallback(async (retryCount = 0) => {
     if (!user) {
       setScanResults([]);
@@ -26,26 +26,34 @@ export const useScanResults = () => {
     }
 
     try {
-      // Create AbortController for timeout
+      // Create AbortController with longer timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
       const { data, error } = await supabase
         .from('scan_results')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50) // Limit to recent 50 scans
+        .limit(25) // Reduced limit for faster loading
         .abortSignal(controller.signal);
 
       clearTimeout(timeoutId);
 
       if (error) {
-        // Handle specific timeout or network errors
-        if (error.code === '57014' || error.message?.includes('timeout') || error.message?.includes('Failed to fetch')) {
-          if (retryCount < 2) {
-            console.log(`Database/network error, retrying scan results... (attempt ${retryCount + 1})`);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+        console.error('Scan results database error:', error);
+        // Handle various error types that might indicate connectivity issues
+        if (
+          error.code === '57014' || 
+          error.message?.includes('timeout') || 
+          error.message?.includes('Failed to fetch') ||
+          error.message?.includes('AbortError') ||
+          error.code === '20' // AbortError code
+        ) {
+          if (retryCount < 3) { // Increased retry count
+            console.log(`Scan results database error, retrying... (attempt ${retryCount + 1})`);
+            const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
             return loadScanResults(retryCount + 1);
           }
         }

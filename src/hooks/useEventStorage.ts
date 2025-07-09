@@ -31,7 +31,7 @@ export const useEventStorage = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load events from Supabase with retry logic
+  // Load events from Supabase with enhanced retry logic
   const loadEvents = async (retryCount = 0) => {
     if (!user) {
       setEvents([]);
@@ -40,25 +40,34 @@ export const useEventStorage = () => {
     }
 
     try {
-      // Create AbortController for timeout
+      // Create AbortController with longer timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+        .limit(50) // Limit results for better performance
         .abortSignal(controller.signal);
 
       clearTimeout(timeoutId);
 
       if (error) {
-        // Handle specific timeout errors
-        if (error.code === '57014' || error.message?.includes('timeout')) {
-          if (retryCount < 2) {
-            console.log(`Database timeout, retrying... (attempt ${retryCount + 1})`);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+        console.error('Database error:', error);
+        // Handle various error types that might indicate connectivity issues
+        if (
+          error.code === '57014' || 
+          error.message?.includes('timeout') || 
+          error.message?.includes('Failed to fetch') ||
+          error.message?.includes('AbortError') ||
+          error.code === '20' // AbortError code
+        ) {
+          if (retryCount < 3) { // Increased retry count
+            console.log(`Database error, retrying... (attempt ${retryCount + 1})`);
+            const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, backoffDelay));
             return loadEvents(retryCount + 1);
           }
         }
