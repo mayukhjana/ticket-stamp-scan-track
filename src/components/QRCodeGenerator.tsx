@@ -132,6 +132,8 @@ const QRCodeGenerator = ({ event, onQRCodesGenerated }: QRCodeGeneratorProps) =>
       // Update the parent component with new QR codes
       onQRCodesGenerated(qrCodes);
       
+      console.log('QR codes generated successfully:', qrCodes.length);
+      
       toast({
         title: "QR Codes Generated Successfully",
         description: `Generated ${qrCodes.length} unique QR codes for ${event.name}.`

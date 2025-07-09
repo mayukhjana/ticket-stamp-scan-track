@@ -129,8 +129,15 @@ const Dashboard = () => {
     
     try {
       await updateEvent(selectedEvent.id, updates);
-      setSelectedEvent({ ...selectedEvent, ...updates });
+      // Update the selected event immediately for UI consistency
+      setSelectedEvent(prev => prev ? { ...prev, ...updates } : null);
+      
+      toast({
+        title: "Template Saved",
+        description: "Template settings have been saved successfully.",
+      });
     } catch (error) {
+      console.error('Template update error:', error);
       toast({
         title: "Error",
         description: "Failed to save template settings. Please try again.",
@@ -446,8 +453,23 @@ const Dashboard = () => {
                   <QRCodeGenerator 
                     event={selectedEvent} 
                     onQRCodesGenerated={async (qrCodes) => {
-                      await updateEvent(selectedEvent.id, { qrCodes });
-                      setSelectedEvent({ ...selectedEvent, qrCodes });
+                      try {
+                        await updateEvent(selectedEvent.id, { qrCodes });
+                        // Update both local state and selected event
+                        setSelectedEvent(prev => prev ? { ...prev, qrCodes } : null);
+                        
+                        toast({
+                          title: "QR Codes Generated",
+                          description: `Successfully generated ${qrCodes.length} QR codes.`,
+                        });
+                      } catch (error) {
+                        console.error('Error saving QR codes:', error);
+                        toast({
+                          title: "Error",
+                          description: "Failed to save QR codes. Please try again.",
+                          variant: "destructive"
+                        });
+                      }
                     }} 
                   />
                 </TabsContent>
